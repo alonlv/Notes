@@ -12,6 +12,14 @@ export function useBackgroundStatus() {
   });
 }
 
+export function useRouterMetrics() {
+  return useQuery({
+    queryKey: ["router-metrics"],
+    queryFn: () => api.routerMetrics.get(),
+    refetchInterval: 30_000,
+  });
+}
+
 /** Flatten every job's recent runs into one timeline, newest first. */
 export function flattenRuns(jobs: Record<string, { recent: JobRun[] }> | undefined): JobRun[] {
   if (!jobs) return [];

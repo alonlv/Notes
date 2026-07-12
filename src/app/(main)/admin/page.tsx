@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { RotateCcw, Save, Plus, Trash2, ChevronDown, ChevronUp, GripVertical, Settings, Cpu, Users, Brain, FileText, Database, Activity, Zap, type LucideIcon } from "lucide-react";
 import { apiFetch } from "@/lib/api";
-import type { BackgroundStatusResponse, Contact, JobRun, JobStatus } from "@/types/api";
+import type { BackgroundStatusResponse, Contact, JobRun, JobStatus, RouterMetricsResponse } from "@/types/api";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -1897,8 +1897,60 @@ const REFRESH_OPTIONS = [
   { label: "1 min", value: 60 },
 ];
 
+function RouterMetricsSection({ metrics }: { metrics: RouterMetricsResponse | null }) {
+  const cloud = metrics?.by_target?.cloud ?? 0;
+  const local = metrics?.by_target?.local ?? 0;
+  const total = metrics?.total ?? 0;
+  const providers = metrics?.providers ?? [];
+
+  return (
+    <Card title="LLM Router">
+      <div className="grid grid-cols-3 gap-3">
+        <div className="rounded-lg border border-border bg-background p-3">
+          <p className="text-xs text-muted-foreground uppercase tracking-wider">Total</p>
+          <p className="text-2xl font-bold mt-1">{total}</p>
+        </div>
+        <div className="rounded-lg border border-border bg-background p-3">
+          <p className="text-xs text-muted-foreground uppercase tracking-wider">Cloud LLM</p>
+          <p className="text-2xl font-bold mt-1 text-blue-500">{cloud}</p>
+        </div>
+        <div className="rounded-lg border border-border bg-background p-3">
+          <p className="text-xs text-muted-foreground uppercase tracking-wider">Local (Ollama)</p>
+          <p className="text-2xl font-bold mt-1 text-emerald-500">{local}</p>
+        </div>
+      </div>
+      {providers.length > 0 ? (
+        <div className="space-y-1.5">
+          <p className="text-xs font-medium text-muted-foreground">By provider</p>
+          {providers.map((p) => (
+            <div key={`${p.base_url}|${p.model}`} className="flex items-center gap-2 text-sm">
+              <span className="font-mono text-xs truncate flex-1">{p.model}</span>
+              <span
+                className={cn(
+                  "text-[10px] px-1.5 py-0.5 rounded-full",
+                  p.target === "local"
+                    ? "bg-emerald-500/15 text-emerald-500"
+                    : "bg-blue-500/15 text-blue-500"
+                )}
+              >
+                {p.target}
+              </span>
+              <span className="tabular-nums text-muted-foreground w-10 text-right">{p.count}</span>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="text-sm text-muted-foreground">
+          No LLM completions recorded yet. Send a chat message or fire the heartbeat to populate this.
+        </p>
+      )}
+    </Card>
+  );
+}
+
 function BackgroundStatusPanel() {
   const [data, setData] = useState<BackgroundStatusResponse | null>(null);
+  const [metrics, setMetrics] = useState<RouterMetricsResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
@@ -1908,8 +1960,12 @@ function BackgroundStatusPanel() {
     setLoading(true);
     setError(null);
     try {
-      const res = await apiFetch<BackgroundStatusResponse>("/api/admin/background-status");
+      const [res, m] = await Promise.all([
+        apiFetch<BackgroundStatusResponse>("/api/admin/background-status"),
+        apiFetch<RouterMetricsResponse>("/api/admin/router-metrics").catch(() => null),
+      ]);
       setData(res);
+      setMetrics(m);
       setLastUpdated(new Date());
     } catch (e) {
       setError((e as Error).message);
@@ -1963,6 +2019,8 @@ function BackgroundStatusPanel() {
       {error && (
         <p className="text-sm text-destructive">{error}</p>
       )}
+
+      <RouterMetricsSection metrics={metrics} />
 
       {!error && jobs.length === 0 && !loading && (
         <Card>

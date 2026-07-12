@@ -1,5 +1,5 @@
 import { apiFetch } from "@alonlv/core-fe";
-import type { Automation, AutomationKind, BackgroundStatusResponse, CalendarConnectionStatus, Note, Priority, Task, TaskStatus, Topic } from "@/types/api";
+import type { Automation, AutomationKind, BackgroundStatusResponse, CalendarConnectionStatus, Note, Priority, RouterMetricsResponse, Task, TaskStatus, Topic } from "@/types/api";
 
 export { apiFetch };
 
@@ -104,6 +104,9 @@ export const api = {
   },
   backgroundStatus: {
     get: () => apiFetch<BackgroundStatusResponse>("/api/admin/background-status"),
+  },
+  routerMetrics: {
+    get: () => apiFetch<RouterMetricsResponse>("/api/admin/router-metrics"),
   },
   chat: {
     send: (message: string, userId?: string) =>
