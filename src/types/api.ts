@@ -100,3 +100,25 @@ export interface JobStatus {
 export interface BackgroundStatusResponse {
   jobs: Record<string, JobStatus>;
 }
+
+export interface RouterProviderStat {
+  model: string;
+  base_url: string;
+  target: "cloud" | "local";
+  count: number;
+}
+
+export interface RouterMetricsResponse {
+  total: number;
+  by_target: { cloud?: number; local?: number };
+  by_kind: { user?: number; background?: number };
+  providers: RouterProviderStat[];
+  recent: {
+    at: string;
+    kind: "user" | "background";
+    target: "cloud" | "local";
+    model: string;
+    base_url: string;
+    duration_ms: number | null;
+  }[];
+}
