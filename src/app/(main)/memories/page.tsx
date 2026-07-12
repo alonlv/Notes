@@ -12,7 +12,27 @@ import { useContacts } from "@/hooks/use-contacts";
 import { useSelectedUser } from "@/context/user-context";
 import { Users } from "lucide-react";
 
-type EditState = { content: string; category: string; authorized_ids: string[] };
+type EditState = { content: string; category: string; topics: string; authorized_ids: string[] };
+
+/** Parse a comma-separated topics string into a clean, de-duplicated, lower-cased list. */
+function parseTopics(raw: string): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const part of raw.split(",")) {
+    const name = part.trim().toLowerCase();
+    if (name && !seen.has(name)) {
+      seen.add(name);
+      out.push(name);
+    }
+  }
+  return out;
+}
+
+/** Read the topics array off a memory's metadata, tolerating missing/malformed values. */
+function memoryTopics(m: Memory): string[] {
+  const raw = (m.metadata as { topics?: unknown })?.topics;
+  return Array.isArray(raw) ? raw.filter((t): t is string => typeof t === "string") : [];
+}
 
 function MemoryForm({
   initial,
@@ -55,6 +75,17 @@ function MemoryForm({
           placeholder="e.g. preference, fact, context…"
         />
       </div>
+      <div>
+        <label className="text-xs text-muted-foreground mb-1 block">Topics (comma-separated)</label>
+        <Input
+          value={s.topics}
+          onChange={(e) => setS((p) => ({ ...p, topics: e.target.value }))}
+          placeholder="e.g. wife, gift-ideas"
+        />
+        <p className="text-[11px] text-muted-foreground/70 mt-1">
+          One memory can belong to several topics — it&apos;s stored once, not duplicated.
+        </p>
+      </div>
       {contacts.length > 0 && (
         <div>
           <label className="text-xs text-muted-foreground mb-1 block">People</label>
@@ -90,6 +121,7 @@ export default function MemoriesPage() {
   const [submitted, setSubmitted] = useState("");
   const [showAdd, setShowAdd] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
+  const [topicFilter, setTopicFilter] = useState<string | null>(null);
   const qc = useQueryClient();
   const { data: contacts = [] } = useContacts();
   const { selectedUserId, selectedUserName } = useSelectedUser();
@@ -126,6 +158,13 @@ export default function MemoriesPage() {
     e.preventDefault();
     setSubmitted(query);
   }
+
+  // Topic chips are derived from the loaded memories; filtering is client-side so
+  // the full chip row stays visible while a single topic is selected.
+  const allTopics = [...new Set(memories.flatMap(memoryTopics))].sort();
+  const visibleMemories = topicFilter
+    ? memories.filter((m) => memoryTopics(m).includes(topicFilter))
+    : memories;
 
   return (
     <div className="max-w-2xl mx-auto p-4 md:p-6">
@@ -165,10 +204,10 @@ export default function MemoriesPage() {
       {showAdd && selectedUserId && (
         <div className="mb-4">
           <MemoryForm
-            initial={{ content: "", category: "", authorized_ids: [selectedUserId] }}
+            initial={{ content: "", category: "", topics: "", authorized_ids: [selectedUserId] }}
             onSave={(s) => {
               const ids = [...new Set([selectedUserId, ...s.authorized_ids].filter(Boolean))];
-              create.mutate({ content: s.content, category: s.category || undefined, user_id: selectedUserId, authorized_ids: ids });
+              create.mutate({ content: s.content, category: s.category || undefined, topics: parseTopics(s.topics), user_id: selectedUserId, authorized_ids: ids });
             }}
             onCancel={() => setShowAdd(false)}
             saving={create.isPending}
@@ -190,26 +229,61 @@ export default function MemoriesPage() {
         <Button type="submit">Search</Button>
       </form>
 
+      {allTopics.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 mb-6">
+          <button
+            onClick={() => setTopicFilter(null)}
+            className={`rounded-full border px-2.5 py-0.5 text-xs transition-colors ${
+              topicFilter === null
+                ? "border-primary bg-primary/10 text-primary"
+                : "border-border text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            All
+          </button>
+          {allTopics.map((t) => (
+            <button
+              key={t}
+              onClick={() => setTopicFilter((cur) => (cur === t ? null : t))}
+              className={`rounded-full border px-2.5 py-0.5 text-xs capitalize transition-colors ${
+                topicFilter === t
+                  ? "border-primary bg-primary/10 text-primary"
+                  : "border-border text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {t}
+            </button>
+          ))}
+        </div>
+      )}
+
       {isLoading ? (
         <div className="space-y-2">
           {[...Array(5)].map((_, i) => <div key={i} className="h-14 rounded-lg bg-muted animate-pulse" />)}
         </div>
-      ) : memories.length === 0 && !showAdd ? (
+      ) : visibleMemories.length === 0 && !showAdd ? (
         <div className="text-center py-16 text-muted-foreground">
           <Brain className="h-8 w-8 mx-auto mb-2 opacity-30" />
-          <p className="text-sm">{submitted ? "No memories matching your search." : "No memories stored yet."}</p>
+          <p className="text-sm">
+            {topicFilter
+              ? `No memories under “${topicFilter}”.`
+              : submitted
+                ? "No memories matching your search."
+                : "No memories stored yet."}
+          </p>
         </div>
       ) : (
         <div className="space-y-2">
-          {memories.map((m) => {
+          {visibleMemories.map((m) => {
             const category = m.metadata?.category as string | undefined;
+            const topics = memoryTopics(m);
             return editId === m.id ? (
               <MemoryForm
                 key={m.id}
-                initial={{ content: m.content, category: category ?? "", authorized_ids: m.authorized_ids?.length ? m.authorized_ids : (m.owner_id || m.user_id) ? [m.owner_id || m.user_id || ""] : [] }}
+                initial={{ content: m.content, category: category ?? "", topics: memoryTopics(m).join(", "), authorized_ids: m.authorized_ids?.length ? m.authorized_ids : (m.owner_id || m.user_id) ? [m.owner_id || m.user_id || ""] : [] }}
                 onSave={(s) => {
                   const ids = [...new Set([selectedUserId, ...s.authorized_ids].filter(Boolean))];
-                  update.mutate({ id: m.id, body: { content: s.content, category: s.category || undefined, user_id: selectedUserId || undefined, authorized_ids: ids } });
+                  update.mutate({ id: m.id, body: { content: s.content, category: s.category || undefined, topics: parseTopics(s.topics), user_id: selectedUserId || undefined, authorized_ids: ids } });
                 }}
                 onCancel={() => setEditId(null)}
                 saving={update.isPending}
@@ -226,6 +300,13 @@ export default function MemoriesPage() {
                         {category.toLowerCase()}
                       </Badge>
                     )}
+                    {topics.map((t) => (
+                      <button key={t} onClick={() => setTopicFilter(t)} title={`Filter by ${t}`}>
+                        <Badge variant="outline" className="text-xs capitalize cursor-pointer hover:border-primary hover:text-primary">
+                          #{t}
+                        </Badge>
+                      </button>
+                    ))}
                     {(() => {
                       const ids: string[] = (m.metadata as any)?.authorized_ids?.length ? (m.metadata as any).authorized_ids : m.authorized_ids?.length ? m.authorized_ids : (m.owner_id || m.user_id) ? [m.owner_id || m.user_id || ""] : [];
                       if (!ids.length) return null;
