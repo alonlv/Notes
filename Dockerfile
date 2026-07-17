@@ -7,11 +7,11 @@ WORKDIR /app
 RUN apk add --no-cache git
 
 COPY package.json package-lock.json ./
-# --mount=type=secret keeps GH_PAT out of the image layers.
-# Falls back to plain HTTPS if no secret is provided (public repo).
-RUN --mount=type=secret,id=gh_pat \
-    GH_PAT=$(cat /run/secrets/gh_pat 2>/dev/null || echo "") && \
-    if [ -n "$GH_PAT" ]; then \
+# Railway's builder only supports --mount=type=cache, not type=secret,
+# so GH_PAT comes in as a build ARG instead. Falls back to plain HTTPS
+# if unset (public repo).
+ARG GH_PAT
+RUN if [ -n "$GH_PAT" ]; then \
       git config --global url."https://x-access-token:${GH_PAT}@github.com/".insteadOf "https://github.com/"; \
       git config --global url."https://x-access-token:${GH_PAT}@github.com/".insteadOf "git@github.com:"; \
       git config --global url."https://x-access-token:${GH_PAT}@github.com/".insteadOf "ssh://git@github.com/"; \
