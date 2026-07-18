@@ -1,11 +1,28 @@
-import { apiFetch } from "@alonlv/core-fe";
 import type { Automation, AutomationKind, BackgroundStatusResponse, CalendarConnectionStatus, Note, Priority, RouterMetricsResponse, Task, TaskStatus, Topic } from "@/types/api";
-
-export { apiFetch };
 
 export interface ChatTurn {
   role: "user" | "assistant";
   text: string;
+}
+
+export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
+  const res = await fetch(path, {
+    ...init,
+    headers: {
+      "Content-Type": "application/json",
+      ...init?.headers,
+    },
+  });
+  if (!res.ok) {
+    let message = String(res.status);
+    try {
+      const body = await res.json();
+      message = body?.error ?? body?.detail ?? message;
+    } catch { /* non-JSON error body */ }
+    throw new Error(message);
+  }
+  if (res.status === 204) return undefined as T;
+  return res.json();
 }
 
 export const api = {

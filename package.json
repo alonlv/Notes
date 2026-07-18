@@ -28,7 +28,6 @@
     "zustand": "^5.0.0"
   },
   "devDependencies": {
-    "@alonlv/core-fe": "github:alonlv/core-fe#claude/core-fe-shared-logic-jm76nu",
     "@playwright/test": "^1.49.0",
     "@types/node": "^22.0.0",
     "@types/react": "^19.0.0",

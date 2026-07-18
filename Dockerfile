@@ -4,23 +4,8 @@
 FROM node:20-alpine AS deps
 WORKDIR /app
 
-RUN apk add --no-cache git
-
 COPY package.json package-lock.json ./
-# Railway's builder only supports --mount=type=cache, not type=secret,
-# so GH_PAT comes in as a build ARG instead. Falls back to plain HTTPS
-# if unset (public repo).
-ARG GH_PAT
-RUN if [ -n "$GH_PAT" ]; then \
-      git config --global url."https://x-access-token:${GH_PAT}@github.com/".insteadOf "https://github.com/"; \
-      git config --global url."https://x-access-token:${GH_PAT}@github.com/".insteadOf "git@github.com:"; \
-      git config --global url."https://x-access-token:${GH_PAT}@github.com/".insteadOf "ssh://git@github.com/"; \
-    else \
-      git config --global url."https://github.com/".insteadOf "git@github.com:"; \
-      git config --global url."https://github.com/".insteadOf "ssh://git@github.com/"; \
-    fi && \
-    npm ci && \
-    rm -f ~/.gitconfig
+RUN npm ci
 
 # ── builder: produce the Next.js standalone output ─────────────────────────────
 FROM node:20-alpine AS builder
