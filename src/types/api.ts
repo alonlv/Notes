@@ -122,3 +122,44 @@ export interface RouterMetricsResponse {
     duration_ms: number | null;
   }[];
 }
+
+export type VoucherKind = "voucher" | "coupon";
+export type VoucherStatus = "ready" | "pending" | "processing" | "failed";
+
+export interface Voucher extends BaseEntity {
+  kind: VoucherKind;
+  title: string;
+  store: string | null;
+  code: string | null;
+  discount: string | null;
+  value_total: number | null;
+  value_used: number;
+  value_currency: string | null;
+  description: string | null;
+  expires_on: string | null;
+  needs_expiration: boolean;
+  source_url: string | null;
+  added_by: string | null;
+  tags: string[];
+  categorized_by: string;
+  status: VoucherStatus;
+  processing_error: string | null;
+  is_used: boolean;
+  category_slug: string;
+  category_name: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface VoucherCategory {
+  slug: string;
+  name: string;
+}
+
+/** Either the created voucher, one still categorizing, or a question to answer first. */
+export interface VoucherCreateResult {
+  status: "created" | "processing" | "needs_clarification";
+  voucher: Voucher | null;
+  question: string | null;
+  draft: Record<string, unknown> | null;
+}

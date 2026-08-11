@@ -1,4 +1,4 @@
-import type { Automation, AutomationKind, BackgroundStatusResponse, CalendarConnectionStatus, Note, Priority, RouterMetricsResponse, Task, TaskStatus, Topic } from "@/types/api";
+import type { Automation, AutomationKind, BackgroundStatusResponse, CalendarConnectionStatus, Note, Priority, RouterMetricsResponse, Task, TaskStatus, Topic, Voucher, VoucherCreateResult } from "@/types/api";
 
 export interface ChatTurn {
   role: "user" | "assistant";
@@ -109,6 +109,33 @@ export const api = {
   },
   routerMetrics: {
     get: () => apiFetch<RouterMetricsResponse>("/api/admin/router-metrics"),
+  },
+  vouchers: {
+    list: (includeUsed = false) =>
+      apiFetch<Voucher[]>(`/api/vouchers${includeUsed ? "?include_used=true" : ""}`),
+    /** Household by default — a gift card is a shared asset, not a private one. */
+    create: (body: {
+      raw_text?: string;
+      kind?: "voucher" | "coupon";
+      store?: string;
+      code?: string;
+      discount?: string;
+      expires_on?: string;
+      no_expiration?: boolean;
+      category?: string;
+      household?: boolean;
+    }) =>
+      apiFetch<VoucherCreateResult>("/api/vouchers", {
+        method: "POST",
+        body: JSON.stringify({ household: true, ...body }),
+      }),
+    spend: (id: string, amount: number) =>
+      apiFetch<Voucher>(`/api/vouchers/${encodeURIComponent(id)}/spend`, {
+        method: "POST",
+        body: JSON.stringify({ amount }),
+      }),
+    delete: (id: string) =>
+      apiFetch<void>(`/api/vouchers/${encodeURIComponent(id)}`, { method: "DELETE" }),
   },
   chat: {
     send: (message: string) =>

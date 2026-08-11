@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
-import { FileText, CheckSquare, MessageSquare, Brain, Zap, Settings, LogOut, Moon, Sun, CalendarDays, LayoutDashboard, Inbox } from "lucide-react";
+import { FileText, CheckSquare, MessageSquare, Brain, Zap, Settings, LogOut, Moon, Sun, CalendarDays, LayoutDashboard, Inbox, Ticket } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTheme } from "@/context/theme-context";
 import { signOut } from "next-auth/react";
@@ -11,6 +11,7 @@ const navItems = [
   { href: "/", label: "Home", icon: LayoutDashboard },
   { href: "/notes", label: "Notes", icon: FileText },
   { href: "/tasks", label: "Tasks", icon: CheckSquare },
+  { href: "/vouchers", label: "Wallet", icon: Ticket },
   { href: "/calendar", label: "Calendar", icon: CalendarDays },
   { href: "/chat", label: "Chat", icon: MessageSquare },
   { href: "/feed", label: "Inbox", icon: Inbox },
