@@ -25,33 +25,32 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
   return res.json();
 }
 
+/**
+ * The signed-in person is never named by the client: the Next.js proxy derives
+ * X-Person-Id from the Auth.js session. That is why nothing below takes a
+ * `user_id` — a browser cannot ask for someone else's data.
+ */
 export const api = {
   notes: {
-    list: (topic?: string, userId?: string) => {
-      const params = new URLSearchParams();
-      if (topic) params.set("topic", topic);
-      if (userId) params.set("user_id", userId);
-      const qs = params.toString();
-      return apiFetch<Note[]>(`/api/notes${qs ? `?${qs}` : ""}`);
+    list: (topic?: string) => {
+      const qs = topic ? `?topic=${encodeURIComponent(topic)}` : "";
+      return apiFetch<Note[]>(`/api/notes${qs}`);
     },
     get: (id: string) =>
       apiFetch<Note>(`/api/notes/${encodeURIComponent(id)}`),
-    create: (body: { content?: string; topic: string; title?: string; user_id?: string }) =>
+    create: (body: { content?: string; topic: string; title?: string }) =>
       apiFetch<Note>("/api/notes", { method: "POST", body: JSON.stringify(body) }),
-    update: (id: string, body: Partial<{ title: string; content: string; topic: string; user_id: string; authorized_ids: string[] }>) =>
+    update: (id: string, body: Partial<{ title: string; content: string; topic: string; authorized_ids: string[] }>) =>
       apiFetch<Note>(`/api/notes/${encodeURIComponent(id)}`, { method: "PUT", body: JSON.stringify(body) }),
     delete: (id: string) =>
       apiFetch<void>(`/api/notes/${encodeURIComponent(id)}`, { method: "DELETE" }),
   },
   tasks: {
-    list: (userId?: string, tag?: string) => {
-      const params = new URLSearchParams();
-      if (userId) params.set("user_id", userId);
-      if (tag) params.set("tag", tag);
-      const qs = params.toString();
-      return apiFetch<Task[]>(`/api/tasks${qs ? `?${qs}` : ""}`);
+    list: (tag?: string) => {
+      const qs = tag ? `?tag=${encodeURIComponent(tag)}` : "";
+      return apiFetch<Task[]>(`/api/tasks${qs}`);
     },
-    create: (body: { title: string; status?: TaskStatus; priority?: Priority; tags?: string[]; due_date?: string; user_id?: string }) =>
+    create: (body: { title: string; status?: TaskStatus; priority?: Priority; tags?: string[]; due_date?: string }) =>
       apiFetch<Task>("/api/tasks", { method: "POST", body: JSON.stringify(body) }),
     update: (
       id: string,
@@ -63,7 +62,6 @@ export const api = {
         tags: string[];
         due_date: string;
         clear_due_date: boolean;
-        user_id: string;
         authorized_ids: string[];
       }>
     ) => apiFetch<Task>(`/api/tasks/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
@@ -75,7 +73,7 @@ export const api = {
     list: () => apiFetch<Topic[]>("/api/topics"),
     create: (body: { name: string; color?: string }) =>
       apiFetch<Topic>("/api/topics", { method: "POST", body: JSON.stringify(body) }),
-    update: (id: string, body: Partial<{ name: string; color: string; user_id: string; authorized_ids: string[] }>) =>
+    update: (id: string, body: Partial<{ name: string; color: string; authorized_ids: string[] }>) =>
       apiFetch<Topic>(`/api/topics/${id}`, { method: "PUT", body: JSON.stringify(body) }),
     delete: (id: string, migrateToId?: string) =>
       apiFetch<void>(
@@ -86,37 +84,24 @@ export const api = {
   // The assistant has no calendar of its own — it drives the user's real Google/Apple
   // calendar. The FE only reports connection status and starts the Google OAuth flow.
   calendars: {
-    connectionStatus: (userId?: string) => {
-      const qs = userId ? `?user_id=${encodeURIComponent(userId)}` : "";
-      return apiFetch<CalendarConnectionStatus>(`/api/calendars/connection-status${qs}`);
-    },
-    googleAuthUrl: (userId?: string) =>
-      `/api/calendars/google-auth${userId ? `?user_id=${encodeURIComponent(userId)}` : ""}`,
-    startGoogleAuth: (userId?: string) =>
-      apiFetch<{ auth_url: string }>(
-        `/api/calendars/google-auth${userId ? `?user_id=${encodeURIComponent(userId)}` : ""}`,
-      ),
-    appleSetup: (body: { user_id: string; username: string; password: string }) =>
+    connectionStatus: () =>
+      apiFetch<CalendarConnectionStatus>("/api/calendars/connection-status"),
+    googleAuthUrl: () => "/api/calendars/google-auth",
+    startGoogleAuth: () => apiFetch<{ auth_url: string }>("/api/calendars/google-auth"),
+    appleSetup: (body: { username: string; password: string }) =>
       apiFetch<{ status: string; username: string }>(`/api/calendars/apple/setup`, {
         method: "POST",
         body: JSON.stringify(body),
       }),
-    disconnectGoogle: (userId: string) =>
-      apiFetch<{ status: string }>(`/api/calendars/google/disconnect?user_id=${encodeURIComponent(userId)}`, {
-        method: "DELETE",
-      }),
-    disconnectApple: (userId: string) =>
-      apiFetch<{ status: string }>(`/api/calendars/apple/disconnect?user_id=${encodeURIComponent(userId)}`, {
-        method: "DELETE",
-      }),
+    disconnectGoogle: () =>
+      apiFetch<{ status: string }>("/api/calendars/google/disconnect", { method: "DELETE" }),
+    disconnectApple: () =>
+      apiFetch<{ status: string }>("/api/calendars/apple/disconnect", { method: "DELETE" }),
   },
   automations: {
-    list: (userId?: string, kind?: AutomationKind) => {
-      const params = new URLSearchParams();
-      if (userId) params.set("user_id", userId);
-      if (kind) params.set("kind", kind);
-      const qs = params.toString();
-      return apiFetch<Automation[]>(`/api/automations${qs ? `?${qs}` : ""}`);
+    list: (kind?: AutomationKind) => {
+      const qs = kind ? `?kind=${encodeURIComponent(kind)}` : "";
+      return apiFetch<Automation[]>(`/api/automations${qs}`);
     },
   },
   backgroundStatus: {
@@ -126,14 +111,11 @@ export const api = {
     get: () => apiFetch<RouterMetricsResponse>("/api/admin/router-metrics"),
   },
   chat: {
-    send: (message: string, userId?: string) =>
+    send: (message: string) =>
       apiFetch<{ reply: string }>("/api/chat", {
         method: "POST",
-        body: JSON.stringify({ message, user_id: userId || "web-user" }),
+        body: JSON.stringify({ message }),
       }),
-    history: (userId?: string) => {
-      const qs = userId ? `?user_id=${encodeURIComponent(userId)}` : "";
-      return apiFetch<{ messages: ChatTurn[] }>(`/api/chat/history${qs}`);
-    },
+    history: () => apiFetch<{ messages: ChatTurn[] }>("/api/chat/history"),
   },
 };

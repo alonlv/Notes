@@ -3,10 +3,10 @@
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 
-/** Whether the user has connected their real Google / Apple calendar. */
-export function useCalendarConnection(userId?: string) {
+/** Whether the signed-in person has connected their real Google / Apple calendar. */
+export function useCalendarConnection() {
   return useQuery({
-    queryKey: ["calendar-connection", userId ?? null],
-    queryFn: () => api.calendars.connectionStatus(userId),
+    queryKey: ["calendar-connection"],
+    queryFn: () => api.calendars.connectionStatus(),
   });
 }

@@ -1,40 +1,19 @@
 "use client";
 
-import { createContext, useContext, useState, ReactNode } from "react";
+import { useSession } from "next-auth/react";
 
-interface UserContextValue {
-  selectedUserId: string | null;
-  selectedUserName: string | null;
-  setSelectedUser: (id: string, name: string) => void;
-  clearSelectedUser: () => void;
+/**
+ * Who the signed-in person is.
+ *
+ * This used to be a contact *switcher*: you picked any contact and every request
+ * carried their `user_id`, so one browser could read anyone's data. Identity now
+ * comes from the signed session and is enforced server-side, so this is
+ * read-only — there is nothing to switch to.
+ */
+export function useCurrentPerson(): { personId: string | null; personName: string | null } {
+  const { data: session } = useSession();
+  return {
+    personId: session?.personId ?? null,
+    personName: session?.user?.name ?? null,
+  };
 }
-
-const UserContext = createContext<UserContextValue>({
-  selectedUserId: null,
-  selectedUserName: null,
-  setSelectedUser: () => {},
-  clearSelectedUser: () => {},
-});
-
-export function UserProvider({ children }: { children: ReactNode }) {
-  const [selectedUserId, setId] = useState<string | null>(null);
-  const [selectedUserName, setName] = useState<string | null>(null);
-
-  function setSelectedUser(id: string, name: string) {
-    setId(id);
-    setName(name);
-  }
-
-  function clearSelectedUser() {
-    setId(null);
-    setName(null);
-  }
-
-  return (
-    <UserContext.Provider value={{ selectedUserId, selectedUserName, setSelectedUser, clearSelectedUser }}>
-      {children}
-    </UserContext.Provider>
-  );
-}
-
-export const useSelectedUser = () => useContext(UserContext);

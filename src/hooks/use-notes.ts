@@ -4,17 +4,17 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import type { Note } from "@/types/api";
 
-export function useNotes(topic?: string, userId?: string) {
+export function useNotes(topic?: string) {
   return useQuery({
-    queryKey: ["notes", topic ?? null, userId ?? null],
-    queryFn: () => api.notes.list(topic, userId),
+    queryKey: ["notes", topic ?? null],
+    queryFn: () => api.notes.list(topic),
   });
 }
 
 export function useCreateNote() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (body: { content?: string; topic: string; title?: string; user_id?: string }) =>
+    mutationFn: (body: { content?: string; topic: string; title?: string }) =>
       api.notes.create(body),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["notes"] }),
   });
@@ -26,7 +26,7 @@ export function useUpdateNote() {
     mutationFn: ({
       id,
       ...body
-    }: { id: string } & Partial<{ title: string; content: string; topic: string; user_id: string; authorized_ids: string[] }>) =>
+    }: { id: string } & Partial<{ title: string; content: string; topic: string; authorized_ids: string[] }>) =>
       api.notes.update(id, body),
     onSuccess: (updated) => {
       qc.invalidateQueries({ queryKey: ["notes"] });

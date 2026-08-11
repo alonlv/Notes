@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { TEST_AUTH_PASSWORD } from "./fixtures";
+import { authenticate } from "./fixtures";
 
 test.describe("authentication", () => {
   test("redirects an unauthenticated user to the login page", async ({ page }) => {
@@ -8,25 +8,27 @@ test.describe("authentication", () => {
     await expect(page.getByRole("heading", { name: "My Workspace" })).toBeVisible();
   });
 
-  test("shows an error for a wrong password", async ({ page }) => {
+  test("offers Google as the only way in", async ({ page }) => {
     await page.goto("/login");
-    await page.getByPlaceholder("Password").fill("definitely-wrong");
-    await page.getByRole("button", { name: "Sign in" }).click();
-    await expect(page.getByText("Wrong password.")).toBeVisible();
-    // Still on the login page — no redirect happened.
-    await expect(page).toHaveURL(/\/login/);
+    await expect(page.getByRole("button", { name: "Continue with Google" })).toBeVisible();
+    // The shared-password form is gone: there is nothing to type.
+    await expect(page.getByPlaceholder("Password")).toHaveCount(0);
   });
 
-  test("accepts the correct password", async ({ page }) => {
-    await page.goto("/login");
-    await page.getByPlaceholder("Password").fill(TEST_AUTH_PASSWORD);
+  test("explains a rejected account", async ({ page }) => {
+    // Auth.js reports AccessDenied when the backend refuses the email.
+    await page.goto("/login?error=AccessDenied");
+    await expect(page.getByText(/isn't allowed to use this workspace/)).toBeVisible();
+  });
 
-    const loginResponse = page.waitForResponse(
-      (r) => r.url().includes("/api/auth/login") && r.request().method() === "POST",
-    );
-    await page.getByRole("button", { name: "Sign in" }).click();
+  test("a signed-in session reaches a protected page", async ({ page, context }) => {
+    await authenticate(context);
+    await page.goto("/notes");
+    await expect(page).toHaveURL(/\/notes/);
+  });
 
-    expect((await loginResponse).status()).toBe(200);
-    await expect(page.getByText("Wrong password.")).toHaveCount(0);
+  test("API routes answer 401 rather than redirecting", async ({ request }) => {
+    const res = await request.get("/api/notes");
+    expect(res.status()).toBe(401);
   });
 });

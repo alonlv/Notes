@@ -2,11 +2,11 @@ import { NextRequest } from "next/server";
 import { proxyFetch } from "@/lib/proxy";
 
 export async function GET(req: NextRequest) {
-  const q = req.nextUrl.searchParams.get("q") ?? "";
-  const userId = req.nextUrl.searchParams.get("user_id") ?? "";
+  const q = req.nextUrl.searchParams.get("q");
+  const topics = req.nextUrl.searchParams.get("topics");
   const params = new URLSearchParams();
   if (q) params.set("q", q);
-  if (userId) params.set("user_id", userId);
+  if (topics) params.set("topics", topics);
   const qs = params.toString();
   return proxyFetch(`/memories${qs ? `?${qs}` : ""}`);
 }

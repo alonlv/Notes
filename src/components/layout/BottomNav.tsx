@@ -5,6 +5,7 @@ import { useRouter, usePathname } from "next/navigation";
 import { FileText, CheckSquare, MessageSquare, Brain, Zap, Settings, LogOut, Moon, Sun, CalendarDays, LayoutDashboard, Inbox } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTheme } from "@/context/theme-context";
+import { signOut } from "next-auth/react";
 
 const navItems = [
   { href: "/", label: "Home", icon: LayoutDashboard },
@@ -24,9 +25,7 @@ export function BottomNav() {
   const { theme, toggleTheme } = useTheme();
 
   async function handleLogout() {
-    await fetch("/api/auth/logout", { method: "POST" });
-    router.push("/login");
-    router.refresh();
+    await signOut({ redirectTo: "/login" });
   }
 
   return (

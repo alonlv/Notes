@@ -9,7 +9,6 @@ import { Badge } from "@/components/ui/badge";
 import { Md } from "@/components/ui/md";
 import type { Memory } from "@/types/api";
 import { useContacts } from "@/hooks/use-contacts";
-import { useSelectedUser } from "@/context/user-context";
 import { Users } from "lucide-react";
 
 type EditState = { content: string; category: string; topics: string; authorized_ids: string[] };
@@ -124,16 +123,12 @@ export default function MemoriesPage() {
   const [topicFilter, setTopicFilter] = useState<string | null>(null);
   const qc = useQueryClient();
   const { data: contacts = [] } = useContacts();
-  const { selectedUserId, selectedUserName } = useSelectedUser();
 
   const { data: memories = [], isLoading, error } = useQuery<Memory[]>({
-    queryKey: ["memories", submitted, selectedUserId],
+    queryKey: ["memories", submitted],
     queryFn: () => {
-      const params = new URLSearchParams();
-      if (submitted) params.set("q", submitted);
-      if (selectedUserId) params.set("user_id", selectedUserId);
-      const qs = params.toString();
-      return fetch(`/api/memories${qs ? `?${qs}` : ""}`).then((r) => r.json());
+      const qs = submitted ? `?q=${encodeURIComponent(submitted)}` : "";
+      return fetch(`/api/memories${qs}`).then((r) => r.json());
     },
   });
 
@@ -171,19 +166,14 @@ export default function MemoriesPage() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold">Memory</h1>
-          {selectedUserName && (
-            <p className="text-xs text-primary mt-0.5">Viewing {selectedUserName}&apos;s memory</p>
-          )}
         </div>
         <div className="flex gap-2">
           <Button variant="ghost" size="sm" onClick={() => qc.invalidateQueries({ queryKey: ["memories"] })}>
             <RefreshCw className="h-4 w-4" />
           </Button>
-          {selectedUserId && (
-            <Button size="sm" onClick={() => { setShowAdd(true); setEditId(null); }}>
-              <Plus className="h-4 w-4 mr-1" /> Add
-            </Button>
-          )}
+          <Button size="sm" onClick={() => { setShowAdd(true); setEditId(null); }}>
+            <Plus className="h-4 w-4 mr-1" /> Add
+          </Button>
         </div>
       </div>
 
@@ -194,20 +184,12 @@ export default function MemoriesPage() {
         </div>
       )}
 
-      {contacts.length > 0 && !selectedUserId && (
-        <div className="mb-4 flex items-center gap-2 rounded-lg border border-border bg-muted/40 px-4 py-3 text-sm text-muted-foreground">
-          <Users className="h-4 w-4 shrink-0" />
-          Select a profile from the sidebar to view and manage memories.
-        </div>
-      )}
-
-      {showAdd && selectedUserId && (
+      {showAdd && (
         <div className="mb-4">
           <MemoryForm
-            initial={{ content: "", category: "", topics: "", authorized_ids: [selectedUserId] }}
+            initial={{ content: "", category: "", topics: "", authorized_ids: [] }}
             onSave={(s) => {
-              const ids = [...new Set([selectedUserId, ...s.authorized_ids].filter(Boolean))];
-              create.mutate({ content: s.content, category: s.category || undefined, topics: parseTopics(s.topics), user_id: selectedUserId, authorized_ids: ids });
+              create.mutate({ content: s.content, category: s.category || undefined, topics: parseTopics(s.topics), authorized_ids: s.authorized_ids.filter(Boolean) });
             }}
             onCancel={() => setShowAdd(false)}
             saving={create.isPending}
@@ -282,8 +264,7 @@ export default function MemoriesPage() {
                 key={m.id}
                 initial={{ content: m.content, category: category ?? "", topics: memoryTopics(m).join(", "), authorized_ids: m.authorized_ids?.length ? m.authorized_ids : (m.owner_id || m.user_id) ? [m.owner_id || m.user_id || ""] : [] }}
                 onSave={(s) => {
-                  const ids = [...new Set([selectedUserId, ...s.authorized_ids].filter(Boolean))];
-                  update.mutate({ id: m.id, body: { content: s.content, category: s.category || undefined, topics: parseTopics(s.topics), user_id: selectedUserId || undefined, authorized_ids: ids } });
+                  update.mutate({ id: m.id, body: { content: s.content, category: s.category || undefined, topics: parseTopics(s.topics), authorized_ids: s.authorized_ids.filter(Boolean) } });
                 }}
                 onCancel={() => setEditId(null)}
                 saving={update.isPending}

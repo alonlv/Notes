@@ -31,17 +31,13 @@ export const EMPTY_SCHEDULED_FORM: ScheduledFormState = {
 
 export function scheduledFormToPayload(
   f: ScheduledFormState,
-  textKey: "message" | "instruction" | "content",
-  ownerId?: string | null
+  textKey: "message" | "instruction" | "content"
 ): Record<string, unknown> {
-  const owner = ownerId || "web-user";
-  const authorizedSet = new Set([owner, ...f.authorized_ids].filter(Boolean));
   return {
     [textKey]: f.text,
     platform: f.platform,
     channel_id: f.channel_id,
-    user_id: owner,
-    authorized_ids: [...authorizedSet],
+    authorized_ids: f.authorized_ids.filter(Boolean),
     run_at: f.scheduleType === "once" && f.run_at ? new Date(f.run_at).toISOString() : null,
     cron: f.scheduleType === "cron" && f.cron ? f.cron : null,
   };
