@@ -80,6 +80,8 @@ export interface CalendarConnectionStatus {
   google: boolean;
   apple: boolean;
   apple_username: string;
+  /** False when the deployment has no Google OAuth credentials set. */
+  google_configured: boolean;
 }
 
 export interface JobRun {

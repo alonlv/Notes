@@ -99,11 +99,21 @@ export default function CalendarConnectionsPage() {
                   Disconnect
                 </Button>
               ) : (
-                <Button size="sm" disabled={busy === "google"} onClick={connectGoogle}>
+                <Button
+                  size="sm"
+                  disabled={busy === "google" || status?.google_configured === false}
+                  onClick={connectGoogle}
+                >
                   {busy === "google" ? <Loader2 className="h-4 w-4 animate-spin" /> : <>Connect <ExternalLink className="h-3.5 w-3.5 ml-1" /></>}
                 </Button>
               )}
             </div>
+            {status?.google_configured === false && !status?.google && (
+              <p className="mt-2 text-xs text-muted-foreground">
+                Google sign-in isn&apos;t set up on this deployment — ask an admin to set
+                GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET.
+              </p>
+            )}
           </div>
 
           {/* Apple */}
