@@ -1,4 +1,4 @@
-import type { Automation, AutomationKind, BackgroundStatusResponse, CalendarConnectionStatus, Note, Priority, RouterMetricsResponse, Task, TaskStatus, Topic, Voucher, VoucherCreateResult } from "@/types/api";
+import type { Automation, AutomationKind, BackgroundStatusResponse, CalendarConnectionStatus, Note, Priority, RouterMetricsResponse, RuleTestResult, Task, TaskStatus, Topic, Voucher, VoucherCreateResult, VoucherRule } from "@/types/api";
 
 export interface ChatTurn {
   role: "user" | "assistant";
@@ -134,8 +134,45 @@ export const api = {
         method: "POST",
         body: JSON.stringify({ amount }),
       }),
+    update: (id: string, body: Partial<{ title: string; store: string; code: string; discount: string; expires_on: string; category_slug: string; is_used: boolean }>) =>
+      apiFetch<Voucher>(`/api/vouchers/${encodeURIComponent(id)}`, {
+        method: "PATCH",
+        body: JSON.stringify(body),
+      }),
+    /** Re-run categorization — the way back from a failed parse. */
+    reprocess: (id: string) =>
+      apiFetch<Voucher>(`/api/vouchers/${encodeURIComponent(id)}/reprocess`, { method: "POST" }),
     delete: (id: string) =>
       apiFetch<void>(`/api/vouchers/${encodeURIComponent(id)}`, { method: "DELETE" }),
+  },
+  /** Regex rules: a match files an item instantly, with no model call. */
+  voucherRules: {
+    list: () => apiFetch<VoucherRule[]>("/api/vouchers/rules"),
+    create: (body: {
+      name: string;
+      regex: string;
+      category_name: string;
+      store?: string;
+      kind?: "voucher" | "coupon";
+      priority?: number;
+    }) =>
+      apiFetch<VoucherRule>("/api/vouchers/rules", {
+        method: "POST",
+        body: JSON.stringify(body),
+      }),
+    update: (id: string, body: Partial<{ name: string; regex: string; category_name: string; store: string; priority: number; enabled: boolean }>) =>
+      apiFetch<VoucherRule>(`/api/vouchers/rules/${encodeURIComponent(id)}`, {
+        method: "PATCH",
+        body: JSON.stringify(body),
+      }),
+    delete: (id: string) =>
+      apiFetch<void>(`/api/vouchers/rules/${encodeURIComponent(id)}`, { method: "DELETE" }),
+    /** Dry-run a pattern before committing to it. */
+    test: (text: string, regex?: string) =>
+      apiFetch<RuleTestResult>("/api/vouchers/rules/test", {
+        method: "POST",
+        body: JSON.stringify({ text, regex }),
+      }),
   },
   chat: {
     send: (message: string) =>

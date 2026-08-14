@@ -30,10 +30,12 @@ export function VoucherCard({
   voucher,
   onSpend,
   onDelete,
+  onReprocess,
 }: {
   voucher: Voucher;
   onSpend: (amount: number) => void;
   onDelete: () => void;
+  onReprocess?: () => void;
 }) {
   const [copied, setCopied] = useState(false);
   const [spending, setSpending] = useState(false);
@@ -107,9 +109,22 @@ export function VoucherCard({
           </span>
         )}
         {voucher.status !== "ready" && (
-          <span className="rounded-full bg-secondary px-2 py-0.5 text-muted-foreground">
-            {voucher.status === "failed" ? "Categorization failed" : "Categorizing…"}
+          <span
+            className={cn(
+              "rounded-full px-2 py-0.5",
+              voucher.status === "failed"
+                ? "bg-destructive/10 text-destructive"
+                : "bg-secondary text-muted-foreground"
+            )}
+          >
+            {voucher.status === "failed" ? "Couldn't file this one" : "Filing…"}
           </span>
+        )}
+        {/* A failed parse used to be a dead end; this is the way back. */}
+        {voucher.status === "failed" && onReprocess && (
+          <button onClick={onReprocess} className="underline text-muted-foreground hover:text-foreground">
+            Try again
+          </button>
         )}
         {voucher.tags.map((tag) => (
           <span key={tag} className="rounded-full bg-secondary px-2 py-0.5 text-muted-foreground">

@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { AlertCircle, Plus, Search, Ticket } from "lucide-react";
 import { AddVoucherForm, type VoucherFormValues } from "@/components/vouchers/AddVoucherForm";
+import { RuleManager } from "@/components/vouchers/RuleManager";
 import { VoucherCard } from "@/components/vouchers/VoucherCard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,6 +11,7 @@ import { cn } from "@/lib/utils";
 import {
   useCreateVoucher,
   useDeleteVoucher,
+  useReprocessVoucher,
   useSpendVoucher,
   useVouchers,
 } from "@/hooks/use-vouchers";
@@ -26,6 +28,7 @@ export default function VouchersPage() {
   const create = useCreateVoucher();
   const spend = useSpendVoucher();
   const remove = useDeleteVoucher();
+  const reprocess = useReprocessVoucher();
 
   const categories = useMemo(() => {
     const counts = new Map<string, number>();
@@ -159,10 +162,15 @@ export default function VouchersPage() {
               voucher={voucher}
               onSpend={(amount) => spend.mutate({ id: voucher.id, amount })}
               onDelete={() => remove.mutate(voucher.id)}
+              onReprocess={() => reprocess.mutate(voucher.id)}
             />
           ))}
         </div>
       )}
+
+      <div className="mt-6">
+        <RuleManager />
+      </div>
     </div>
   );
 }

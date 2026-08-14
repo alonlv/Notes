@@ -36,3 +36,12 @@ export function useDeleteVoucher() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["vouchers"] }),
   });
 }
+
+/** Re-run categorization on a voucher that failed or was parsed badly. */
+export function useReprocessVoucher() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: api.vouchers.reprocess,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["vouchers"] }),
+  });
+}

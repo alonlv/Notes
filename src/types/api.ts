@@ -165,3 +165,30 @@ export interface VoucherCreateResult {
   question: string | null;
   draft: Record<string, unknown> | null;
 }
+
+/** A regex that files a matching item with no LLM call. */
+export interface VoucherRule extends BaseEntity {
+  name: string;
+  regex: string;
+  ignore_case: boolean;
+  category_name: string;
+  category_slug: string;
+  store: string | null;
+  kind: VoucherKind;
+  tags: string[];
+  /** Lower runs first, so specific rules win over broad ones. */
+  priority: number;
+  enabled: boolean;
+  created_at: string;
+}
+
+export interface RuleTestResult {
+  matched: boolean;
+  matched_rule?: string;
+  extracted_code?: string | null;
+  category?: string | null;
+  store?: string | null;
+  discount?: string | null;
+  title?: string | null;
+  error?: string;
+}
