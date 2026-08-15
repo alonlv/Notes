@@ -486,68 +486,7 @@ export default function AdminPage() {
       )}
 
       {/* ── Prompt ──────────────────────────────────────────────────────── */}
-      {tab === "prompt" && (
-        <div className="space-y-5">
-          {(
-            [
-              {
-                key: "prompt_core" as const,
-                label: "Core Behavior",
-                hint: "Injected first in every system prompt. Sets the agent's personality and capabilities.",
-                vars: [
-                  { name: "{agent_name}", resolved: config.agent_name, desc: "Agent's display name" },
-                  { name: "{agent_timezone}", resolved: config.agent_timezone, desc: "IANA timezone for date/time math" },
-                ],
-                position: "① First section",
-              },
-              {
-                key: "prompt_memory" as const,
-                label: "Memory Rules",
-                hint: "Controls when the agent stores and retrieves long-term memories.",
-                vars: [],
-                position: "② Second section",
-              },
-              {
-                key: "prompt_proactive" as const,
-                label: "Proactive Tasks",
-                hint: "Instructions for background intelligence tasks that run without a user prompt.",
-                vars: [],
-                position: "③ Third section",
-              },
-              {
-                key: "prompt_notes" as const,
-                label: "Notes Guidelines",
-                hint: "Controls how the agent creates and formats notes and tasks.",
-                vars: [],
-                position: "④ Fourth section",
-              },
-            ] as const
-          ).map(({ key, label, hint, vars, position }) => (
-            <PromptCard
-              key={key}
-              label={label}
-              hint={hint}
-              vars={vars as unknown as PromptVar[]}
-              position={position}
-              value={config[key]}
-              defaultValue={(defaults[key] as string) ?? ""}
-              onChange={(v) => setConfig({ ...config, [key]: v })}
-              onSave={() => saveField(key, config[key])}
-              onReset={async () => {
-                try {
-                  await apiFetch(`/api/admin/config/${key}`, { method: "DELETE" });
-                  setConfig((prev) =>
-                    prev ? { ...prev, [key]: (defaults[key] as string) ?? "" } : prev
-                  );
-                  toast("Reset to default", "info");
-                } catch (e) {
-                  toast((e as Error).message, "error");
-                }
-              }}
-            />
-          ))}
-        </div>
-      )}
+      {tab === "prompt" && <PromptsPanel toast={toast} />}
 
       {/* ── Providers ───────────────────────────────────────────────────── */}
       {tab === "providers" && (
@@ -849,36 +788,128 @@ function ProviderCard({
   );
 }
 
-// ─── Prompt card ──────────────────────────────────────────────────────────────
+// ─── Prompts panel ────────────────────────────────────────────────────────────
 
-interface PromptVar {
-  name: string;
-  resolved: string;
-  desc: string;
+interface PromptEntry {
+  key: string;
+  label: string;
+  group: string;
+  description: string;
+  placeholders: string[];
+  contract: string;
+  default: string;
+  value: string;
+  customized: boolean;
+}
+
+/**
+ * Every prompt, built from the backend registry rather than a list held here.
+ *
+ * The four that used to be listed in this file were the only ones anybody could
+ * edit; the rest — the check-in rules, the reminder wording, the guest prompt —
+ * were literals in agent.py. Reading the registry means adding a prompt there
+ * makes it appear here with no frontend change.
+ */
+function PromptsPanel({
+  toast,
+}: {
+  toast: (msg: string, type: "success" | "error" | "info") => void;
+}) {
+  const [prompts, setPrompts] = useState<PromptEntry[] | null>(null);
+  const [drafts, setDrafts] = useState<Record<string, string>>({});
+
+  const load = useCallback(async () => {
+    try {
+      const body = await apiFetch<{ prompts: PromptEntry[] }>("/api/admin/prompts");
+      setPrompts(body.prompts);
+      setDrafts(Object.fromEntries(body.prompts.map((p) => [p.key, p.value])));
+    } catch (e) {
+      toast((e as Error).message, "error");
+    }
+  }, [toast]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  async function save(entry: PromptEntry) {
+    try {
+      await apiFetch(`/api/admin/prompts/${encodeURIComponent(entry.key)}`, {
+        method: "PUT",
+        body: JSON.stringify({ text: drafts[entry.key] ?? "" }),
+      });
+      toast(`Saved ${entry.label}`, "success");
+      load();
+    } catch (e) {
+      // The backend refuses an edit that breaks the prompt's contract — surface
+      // the reason rather than a generic failure.
+      toast((e as Error).message, "error");
+    }
+  }
+
+  async function reset(entry: PromptEntry) {
+    try {
+      await apiFetch(`/api/admin/prompts/${encodeURIComponent(entry.key)}`, { method: "DELETE" });
+      toast(`${entry.label} reset to default`, "info");
+      load();
+    } catch (e) {
+      toast((e as Error).message, "error");
+    }
+  }
+
+  if (!prompts) return <p className="text-sm text-muted-foreground">Loading prompts…</p>;
+
+  const groups = [...new Set(prompts.map((p) => p.group))];
+
+  return (
+    <div className="space-y-8">
+      {groups.map((group) => (
+        <div key={group} className="space-y-5">
+          <h2 className="text-sm font-semibold">{group}</h2>
+          {prompts
+            .filter((p) => p.group === group)
+            .map((entry) => (
+              <PromptCard
+                key={entry.key}
+                label={entry.label}
+                hint={entry.description}
+                placeholders={entry.placeholders}
+                contract={entry.contract}
+                customized={entry.customized}
+                value={drafts[entry.key] ?? ""}
+                onChange={(v) => setDrafts((d) => ({ ...d, [entry.key]: v }))}
+                onSave={() => save(entry)}
+                onReset={() => reset(entry)}
+              />
+            ))}
+        </div>
+      ))}
+    </div>
+  );
 }
 
 function PromptCard({
   label,
   hint,
-  vars,
-  position,
+  placeholders,
+  contract,
+  customized,
   value,
-  defaultValue,
   onChange,
   onSave,
   onReset,
 }: {
   label: string;
   hint: string;
-  vars: PromptVar[];
-  position: string;
+  placeholders: string[];
+  contract: string;
+  customized: boolean;
   value: string;
-  defaultValue: string;
   onChange: (v: string) => void;
   onSave: () => void;
   onReset: () => void;
 }) {
-  const isDirty = value !== defaultValue && defaultValue !== "";
+  const isDirty = customized;
 
   function insertAtCursor(e: React.MouseEvent<HTMLButtonElement>, snippet: string) {
     e.preventDefault();
@@ -910,38 +941,34 @@ function PromptCard({
       </div>
       <p className="text-xs text-muted-foreground mb-3">{hint}</p>
 
-      {/* Inline reference panel */}
-      <div className="rounded-md bg-muted/50 border border-border px-3 py-2.5 mb-3 space-y-2">
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Position</span>
-          <span className="text-xs text-foreground font-mono">{position}</span>
-          <span className="text-muted-foreground/40 text-xs">·</span>
-          <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Format</span>
-          <span className="text-xs text-muted-foreground">plain text or Markdown</span>
-        </div>
+      {/* A prompt the code parses. Editing away the contract changes behaviour
+          silently, so say so before they hit Save rather than after. */}
+      {contract && (
+        <p className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 mb-3 text-xs text-amber-700 dark:text-amber-400">
+          {contract}
+        </p>
+      )}
 
-        {vars.length > 0 ? (
+      <div className="rounded-md bg-muted/50 border border-border px-3 py-2.5 mb-3 space-y-2">
+        {placeholders.length > 0 ? (
           <div>
             <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
               Available placeholders — click to insert
             </p>
             <div className="flex flex-wrap gap-2">
-              {vars.map((v) => (
+              {placeholders.map((name) => (
                 <button
-                  key={v.name}
-                  onMouseDown={(e) => insertAtCursor(e, v.name)}
+                  key={name}
+                  onMouseDown={(e) => insertAtCursor(e, `{${name}}`)}
                   className="group flex items-baseline gap-1.5 rounded border border-dashed border-border bg-background px-2 py-1 hover:border-primary hover:bg-primary/5 transition-colors text-left"
                 >
-                  <code className="text-xs font-mono text-primary group-hover:text-primary">{v.name}</code>
-                  <span className="text-[10px] text-muted-foreground">→</span>
-                  <span className="text-[10px] text-foreground font-medium">{v.resolved || "—"}</span>
-                  <span className="text-[10px] text-muted-foreground hidden sm:inline">({v.desc})</span>
+                  <code className="text-xs font-mono text-primary">{`{${name}}`}</code>
                 </button>
               ))}
             </div>
           </div>
         ) : (
-          <p className="text-xs text-muted-foreground">No variable substitution in this section.</p>
+          <p className="text-xs text-muted-foreground">No variable substitution in this prompt.</p>
         )}
       </div>
 
