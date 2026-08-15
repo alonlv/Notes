@@ -13,6 +13,7 @@ import {
   useDeleteVoucher,
   useReprocessVoucher,
   useSpendVoucher,
+  useUpdateVoucher,
   useVouchers,
 } from "@/hooks/use-vouchers";
 
@@ -29,6 +30,7 @@ export default function VouchersPage() {
   const spend = useSpendVoucher();
   const remove = useDeleteVoucher();
   const reprocess = useReprocessVoucher();
+  const update = useUpdateVoucher();
 
   const categories = useMemo(() => {
     const counts = new Map<string, number>();
@@ -163,6 +165,7 @@ export default function VouchersPage() {
               onSpend={(amount) => spend.mutate({ id: voucher.id, amount })}
               onDelete={() => remove.mutate(voucher.id)}
               onReprocess={() => reprocess.mutate(voucher.id)}
+              onUpdate={(patch) => update.mutate({ id: voucher.id, ...patch })}
             />
           ))}
         </div>

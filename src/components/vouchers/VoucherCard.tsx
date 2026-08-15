@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { AlertTriangle, Copy, Check, Trash2, Wallet } from "lucide-react";
+import { AlertTriangle, Copy, Check, ExternalLink, Pencil, Trash2, Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
@@ -31,15 +31,20 @@ export function VoucherCard({
   onSpend,
   onDelete,
   onReprocess,
+  onUpdate,
 }: {
   voucher: Voucher;
   onSpend: (amount: number) => void;
   onDelete: () => void;
   onReprocess?: () => void;
+  onUpdate?: (patch: { value_total?: number; source_url?: string }) => void;
 }) {
   const [copied, setCopied] = useState(false);
   const [spending, setSpending] = useState(false);
   const [amount, setAmount] = useState("");
+  const [editing, setEditing] = useState(false);
+  const [editValue, setEditValue] = useState("");
+  const [editUrl, setEditUrl] = useState("");
 
   const expiry = expiryLabel(voucher);
   const remaining =
@@ -59,6 +64,23 @@ export function VoucherCard({
     onSpend(value);
     setAmount("");
     setSpending(false);
+  }
+
+  function openEditor() {
+    // Seeded from what is already there, so this reads as a correction rather
+    // than starting over.
+    setEditValue(voucher.value_total !== null ? String(voucher.value_total) : "");
+    setEditUrl(voucher.source_url ?? "");
+    setEditing(true);
+  }
+
+  function submitEdit() {
+    const patch: { value_total?: number; source_url?: string } = {};
+    const value = Number(editValue);
+    if (editValue.trim() && Number.isFinite(value) && value > 0) patch.value_total = value;
+    if (editUrl.trim()) patch.source_url = editUrl.trim();
+    if (Object.keys(patch).length > 0) onUpdate?.(patch);
+    setEditing(false);
   }
 
   return (
@@ -133,21 +155,83 @@ export function VoucherCard({
         ))}
       </div>
 
-      {voucher.code && (
-        <button
-          onClick={copyCode}
-          className="flex items-center gap-2 rounded border border-border px-2 py-1 font-mono text-sm hover:bg-accent transition-colors"
-          title="Copy code"
-        >
-          {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
-          {voucher.code}
-        </button>
+      <div className="flex flex-wrap items-center gap-2">
+        {voucher.code && (
+          <button
+            onClick={copyCode}
+            className="flex items-center gap-2 rounded border border-border px-2 py-1 font-mono text-sm hover:bg-accent transition-colors"
+            title="Copy code"
+          >
+            {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+            {voucher.code}
+          </button>
+        )}
+        {voucher.source_url && (
+          // noreferrer as well as noopener: the target is whatever the voucher
+          // was pasted from, which is not necessarily somewhere trusted.
+          <a
+            href={voucher.source_url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-1.5 rounded border border-border px-2 py-1 text-sm text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+            title={voucher.source_url}
+          >
+            <ExternalLink className="h-3.5 w-3.5" />
+            Open
+          </a>
+        )}
+      </div>
+
+      {/* Filling in what the parser could not know. A voucher added over
+          Telegram usually arrives with neither a balance nor a link. */}
+      {editing && (
+        <div className="space-y-2 rounded-md border border-border p-2">
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-muted-foreground w-14 shrink-0">Worth</span>
+            <Input
+              type="number"
+              min="0"
+              step="0.01"
+              value={editValue}
+              onChange={(e) => setEditValue(e.target.value)}
+              placeholder={`Amount${currency ? ` in ${currency}` : ""}`}
+              className="h-8"
+              autoFocus
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-muted-foreground w-14 shrink-0">Link</span>
+            <Input
+              type="url"
+              value={editUrl}
+              onChange={(e) => setEditUrl(e.target.value)}
+              placeholder="https://…"
+              className="h-8"
+              onKeyDown={(e) => e.key === "Enter" && submitEdit()}
+            />
+          </div>
+          <div className="flex gap-1">
+            <Button size="sm" onClick={submitEdit}>Save</Button>
+            <Button variant="ghost" size="sm" onClick={() => setEditing(false)}>Cancel</Button>
+          </div>
+        </div>
       )}
 
       <div className="flex items-center gap-2">
         {remaining !== null && remaining > 0 && !spending && (
           <Button variant="ghost" size="sm" onClick={() => setSpending(true)}>
             <Wallet className="h-3.5 w-3.5 mr-1" /> Spend
+          </Button>
+        )}
+        {onUpdate && !editing && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={openEditor}
+            title="Set what it's worth, or a link to redeem it"
+          >
+            <Pencil className="h-3.5 w-3.5 mr-1" />
+            {remaining === null && !voucher.source_url ? "Add value or link" : "Edit"}
           </Button>
         )}
         {spending && (

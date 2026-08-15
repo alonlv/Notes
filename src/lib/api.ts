@@ -120,6 +120,11 @@ export const api = {
       store?: string;
       code?: string;
       discount?: string;
+      /** Trackable balance. Set it and the card shows what is left and offers Spend. */
+      value_total?: number;
+      value_currency?: string;
+      /** Where to redeem it. Extracted from raw_text when not given explicitly. */
+      source_url?: string;
       expires_on?: string;
       no_expiration?: boolean;
       category?: string;
@@ -134,7 +139,7 @@ export const api = {
         method: "POST",
         body: JSON.stringify({ amount }),
       }),
-    update: (id: string, body: Partial<{ title: string; store: string; code: string; discount: string; expires_on: string; category_slug: string; is_used: boolean }>) =>
+    update: (id: string, body: Partial<{ title: string; store: string; code: string; discount: string; value_total: number; value_currency: string; source_url: string; expires_on: string; category_slug: string; is_used: boolean }>) =>
       apiFetch<Voucher>(`/api/vouchers/${encodeURIComponent(id)}`, {
         method: "PATCH",
         body: JSON.stringify(body),

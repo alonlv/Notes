@@ -10,10 +10,15 @@ export interface VoucherFormValues {
   store?: string;
   code?: string;
   discount?: string;
+  value_total?: number;
+  value_currency?: string;
+  source_url?: string;
   expires_on?: string;
   no_expiration?: boolean;
   household: boolean;
 }
+
+const CURRENCIES = ["₪", "$", "€", "£"];
 
 /**
  * Paste-and-go: the backend parses free text into structured fields, so the
@@ -42,14 +47,28 @@ export function AddVoucherForm({
   const [store, setStore] = useState("");
   const [code, setCode] = useState("");
   const [discount, setDiscount] = useState("");
+  const [valueTotal, setValueTotal] = useState("");
+  const [currency, setCurrency] = useState(CURRENCIES[0]);
+  const [sourceUrl, setSourceUrl] = useState("");
+
+  const amount = Number(valueTotal);
+  const amountIsValid = !valueTotal.trim() || (Number.isFinite(amount) && amount > 0);
+  // Checked here rather than left to the backend so a typo is caught while the
+  // form is still open and the text is still in front of you.
+  const urlIsValid = !sourceUrl.trim() || /^https?:\/\/\S+$/i.test(sourceUrl.trim());
 
   function submit() {
-    if (!rawText.trim()) return;
+    if (!rawText.trim() || !amountIsValid || !urlIsValid) return;
     onSubmit({
       raw_text: rawText.trim(),
       store: store.trim() || undefined,
       code: code.trim() || undefined,
       discount: discount.trim() || undefined,
+      // A balance is what makes Spend work; without it the card can only show
+      // the discount text and the Spend button never appears.
+      value_total: valueTotal.trim() ? amount : undefined,
+      value_currency: valueTotal.trim() ? currency : undefined,
+      source_url: sourceUrl.trim() || undefined,
       expires_on: expiresOn || undefined,
       no_expiration: noExpiration || undefined,
       household,
@@ -131,19 +150,78 @@ export function AddVoucherForm({
           Add details manually
         </button>
       ) : (
-        <div className="grid gap-2 sm:grid-cols-3">
-          <Input value={store} onChange={(e) => setStore(e.target.value)} placeholder="Store" />
-          <Input value={code} onChange={(e) => setCode(e.target.value)} placeholder="Code" />
+        <div className="space-y-2">
+          <div className="grid gap-2 sm:grid-cols-3">
+            <Input value={store} onChange={(e) => setStore(e.target.value)} placeholder="Store" />
+            <Input value={code} onChange={(e) => setCode(e.target.value)} placeholder="Code" />
+            <Input
+              value={discount}
+              onChange={(e) => setDiscount(e.target.value)}
+              placeholder="Discount, e.g. 20% off"
+            />
+          </div>
+
+          {/* Balance. Entering one turns on the remaining-value display and the
+              Spend button; a coupon ("20% off") has none, so this stays empty. */}
+          <div className="flex gap-2">
+            <Input
+              type="number"
+              inputMode="decimal"
+              min="0"
+              step="0.01"
+              value={valueTotal}
+              onChange={(e) => setValueTotal(e.target.value)}
+              placeholder="Amount to track, e.g. 200"
+              className="flex-1"
+              aria-invalid={!amountIsValid}
+            />
+            <div className="flex items-center gap-1 rounded-lg border border-border p-1">
+              {CURRENCIES.map((symbol) => (
+                <button
+                  key={symbol}
+                  type="button"
+                  onClick={() => setCurrency(symbol)}
+                  className={cn(
+                    "rounded px-2 py-1 text-xs font-medium transition-colors",
+                    currency === symbol
+                      ? "bg-primary text-primary-foreground"
+                      : "text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  {symbol}
+                </button>
+              ))}
+            </div>
+          </div>
+          {!amountIsValid && (
+            <p className="text-xs text-destructive">Enter a positive number, or leave it blank.</p>
+          )}
+
           <Input
-            value={discount}
-            onChange={(e) => setDiscount(e.target.value)}
-            placeholder="Value, e.g. 200₪"
+            type="url"
+            value={sourceUrl}
+            onChange={(e) => setSourceUrl(e.target.value)}
+            placeholder="Link to the voucher (optional)"
+            aria-invalid={!urlIsValid}
           />
+          {!urlIsValid ? (
+            <p className="text-xs text-destructive">
+              That doesn&apos;t look like a link — it should start with http:// or https://.
+            </p>
+          ) : (
+            <p className="text-xs text-muted-foreground">
+              A link in the pasted text is picked up automatically; fill this in to override it.
+            </p>
+          )}
         </div>
       )}
 
       <div className="flex gap-2">
-        <Button size="sm" onClick={submit} disabled={saving || !rawText.trim()}>
+        <Button
+          size="sm"
+          onClick={submit}
+          disabled={saving || !rawText.trim() || !amountIsValid || !urlIsValid}
+        >
           {saving ? "Saving…" : "Add"}
         </Button>
         <Button variant="ghost" size="sm" onClick={onCancel}>

@@ -29,6 +29,22 @@ export function useSpendVoucher() {
   });
 }
 
+/**
+ * Correct a voucher by hand.
+ *
+ * Mostly for the two fields the parser cannot invent: what the card is worth,
+ * and where to redeem it. Vouchers added over Telegram usually arrive without
+ * either, and until this existed there was no way to fill them in.
+ */
+export function useUpdateVoucher() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...body }: { id: string } & Parameters<typeof api.vouchers.update>[1]) =>
+      api.vouchers.update(id, body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["vouchers"] }),
+  });
+}
+
 export function useDeleteVoucher() {
   const qc = useQueryClient();
   return useMutation({

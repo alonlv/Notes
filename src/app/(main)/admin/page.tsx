@@ -26,6 +26,7 @@ interface Config {
   agent_timezone: string;
   agent_max_tool_rounds: number;
   agent_verbose_responses: boolean;
+  response_language: string;
   organizer_name: string;
   organizer_email: string;
   news_provider: string;
@@ -400,6 +401,15 @@ export default function AdminPage() {
               onSave={() => saveField("agent_timezone", config.agent_timezone)}
               onReset={() => resetField("agent_timezone")}
               placeholder="e.g. Asia/Jerusalem"
+            />
+            <SaveRow
+              label="Reply language"
+              hint="What the assistant answers in, whatever language you write in. Use “auto” to mirror the user instead."
+              value={config.response_language}
+              onChange={(v) => setConfig({ ...config, response_language: v })}
+              onSave={() => saveField("response_language", config.response_language)}
+              onReset={() => resetField("response_language")}
+              placeholder="e.g. English"
             />
             <SaveRow
               label="Max Tool Rounds"
@@ -1597,6 +1607,28 @@ function DataItem({ type, item, contacts, onUpdate }: { type: string; item: any;
 
 // ─── Heartbeat panel ──────────────────────────────────────────────────────────
 
+interface HeartbeatResult {
+  contact_id: string;
+  status: "sent" | "skipped" | "not_configured" | "error";
+  reason: string;
+  message: string;
+}
+
+interface HeartbeatRunResponse {
+  ok: boolean;
+  sent: number;
+  ran: number;
+  results: HeartbeatResult[];
+}
+
+/** "Nothing was sent" is three different outcomes; the labels keep them apart. */
+const HEARTBEAT_STATUS_LABEL: Record<string, string> = {
+  sent: "Message sent",
+  skipped: "Ran, nothing to report",
+  not_configured: "Could not run",
+  error: "Failed",
+};
+
 function HeartbeatPanel({
   contacts,
   toast,
@@ -1608,24 +1640,32 @@ function HeartbeatPanel({
   const [eventText, setEventText] = useState("");
   const [firing, setFiring] = useState(false);
   const [triggering, setTriggering] = useState(false);
+  const [results, setResults] = useState<HeartbeatResult[] | null>(null);
 
   async function fireHeartbeat() {
     if (!selectedUser) return;
     setFiring(true);
+    setResults(null);
     try {
-      const res = await fetch(`/api/trigger?user_id=${encodeURIComponent(selectedUser)}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ event: "Manual heartbeat test from Admin panel. Check if there is anything worth reporting for this user right now." }),
-      });
-      if (res.ok) {
-        toast("Heartbeat queued — check the user's messaging channel", "success");
+      // The real heartbeat, run synchronously so the outcome is visible here.
+      // This used to push a synthetic event through /trigger, which runs a
+      // monitor automation — a different code path from the one being tested.
+      const res = await apiFetch<HeartbeatRunResponse>(
+        `/api/admin/heartbeat/run?user_id=${encodeURIComponent(selectedUser)}`,
+        { method: "POST" }
+      );
+      setResults(res.results);
+      const sent = res.results.filter((r) => r.status === "sent").length;
+      if (sent > 0) {
+        toast(`Heartbeat sent — check the contact's channel`, "success");
+      } else if (res.results.some((r) => r.status === "skipped")) {
+        // Not a failure: staying quiet is what a heartbeat does most of the time.
+        toast("Heartbeat ran and had nothing to report", "info");
       } else {
-        const data = await res.json().catch(() => ({}));
-        toast(data?.error ?? "Heartbeat failed", "error");
+        toast("Heartbeat could not run — see below", "error");
       }
-    } catch {
-      toast("Network error", "error");
+    } catch (e) {
+      toast((e as Error).message, "error");
     } finally {
       setFiring(false);
     }
@@ -1635,20 +1675,16 @@ function HeartbeatPanel({
     if (!selectedUser || !eventText.trim()) return;
     setTriggering(true);
     try {
-      const res = await fetch(`/api/trigger?user_id=${encodeURIComponent(selectedUser)}`, {
+      await apiFetch(`/api/trigger?user_id=${encodeURIComponent(selectedUser)}`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ event: eventText.trim() }),
       });
-      if (res.ok) {
-        toast("Event pushed — agent is reasoning about it", "success");
-        setEventText("");
-      } else {
-        const data = await res.json().catch(() => ({}));
-        toast(data?.error ?? "Trigger failed", "error");
-      }
-    } catch {
-      toast("Network error", "error");
+      toast("Event pushed — agent is reasoning about it", "success");
+      setEventText("");
+    } catch (e) {
+      // apiFetch reads FastAPI's `detail`, so the real reason survives — the raw
+      // fetch here only looked at `error` and reported everything as "Trigger failed".
+      toast((e as Error).message, "error");
     } finally {
       setTriggering(false);
     }
@@ -1662,6 +1698,10 @@ function HeartbeatPanel({
           contact that has a primary channel set. It checks overdue tasks, due-soon tasks, and calendar events,
           then sends a message <em>only if there is something genuinely actionable</em>. If nothing is worth
           reporting it stays silent.
+        </p>
+        <p className="text-sm text-muted-foreground leading-relaxed mt-2">
+          That silence is why <strong>Fire heartbeat now</strong> reports back per contact: a heartbeat that
+          ran and chose to say nothing looks the same from the outside as one that never ran at all.
         </p>
         <p className="text-sm text-muted-foreground leading-relaxed mt-2">
           The <strong>external trigger</strong> endpoint (<code className="text-xs bg-muted px-1 py-0.5 rounded">/trigger/&#123;user_id&#125;</code>) lets
@@ -1695,9 +1735,36 @@ function HeartbeatPanel({
               disabled={!selectedUser || firing}
               onClick={fireHeartbeat}
             >
-              {firing ? "Firing…" : "Fire heartbeat now"}
+              {firing ? "Running…" : "Fire heartbeat now"}
             </Button>
           </div>
+
+          {results && (
+            <div className="space-y-2">
+              {results.map((r) => (
+                <div
+                  key={r.contact_id}
+                  className={cn(
+                    "rounded-md border px-3 py-2 text-xs",
+                    r.status === "sent" && "border-green-600/40 bg-green-600/10",
+                    r.status === "skipped" && "border-border bg-muted/50",
+                    (r.status === "error" || r.status === "not_configured") &&
+                      "border-destructive/40 bg-destructive/10"
+                  )}
+                >
+                  <div className="font-medium">
+                    {r.contact_id} — {HEARTBEAT_STATUS_LABEL[r.status] ?? r.status}
+                  </div>
+                  {r.reason && <p className="text-muted-foreground mt-0.5">{r.reason}</p>}
+                  {r.message && (
+                    <p className="mt-1 whitespace-pre-wrap border-l-2 border-border pl-2">
+                      {r.message}
+                    </p>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
 
           <div className="border-t border-border pt-4">
             <label className="block text-xs font-medium text-muted-foreground mb-1">
