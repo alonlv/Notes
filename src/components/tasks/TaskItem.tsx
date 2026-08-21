@@ -3,15 +3,18 @@
 import { useState, useRef } from "react";
 import type { Task } from "@/types/api";
 import { useUpdateTask, useDeleteTask } from "@/hooks/use-tasks";
+import { useTaskReminders, useSetTaskReminder, useDeleteAutomation } from "@/hooks/use-automations";
 import { Button } from "@/components/ui/button";
-import { Trash2, Calendar, Tag } from "lucide-react";
+import { Trash2, Calendar, Tag, Bell, BellRing } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   PRIORITY_BADGE_COLORS,
   PRIORITY_LABELS,
   STATUS_COLORS,
   STATUS_LABELS,
+  defaultReminderTime,
   formatDueDate,
+  formatReminderTime,
   isOverdue,
   nextPriority,
   tagColor,
@@ -23,7 +26,11 @@ const STATUS_CYCLE: TaskStatus[] = ["todo", "in_progress", "done"];
 export function TaskItem({ task, onTagClick }: { task: Task; showStatus?: boolean; onTagClick?: (tag: string) => void }) {
   const updateTask = useUpdateTask();
   const deleteTask = useDeleteTask();
+  const setTaskReminder = useSetTaskReminder();
+  const deleteAutomation = useDeleteAutomation();
+  const reminder = useTaskReminders().get(task.id);
   const [showDateInput, setShowDateInput] = useState(false);
+  const [showReminderInput, setShowReminderInput] = useState(false);
   const [editingTag, setEditingTag] = useState(false);
   const [tagInput, setTagInput] = useState("");
   const tagInputRef = useRef<HTMLInputElement>(null);
@@ -41,6 +48,19 @@ export function TaskItem({ task, onTagClick }: { task: Task; showStatus?: boolea
 
   function removeTag(tag: string) {
     updateTask.mutate({ id: task.id, tags: (task.tags ?? []).filter((t) => t !== tag) });
+  }
+
+  /** The bell is the only thing that makes a task actually reach you — a due date never does. */
+  function toggleReminder() {
+    if (reminder) {
+      deleteAutomation.mutate(reminder.id);
+      return;
+    }
+    if (task.due_date) {
+      setTaskReminder.setReminder(task, defaultReminderTime(task.due_date));
+      return;
+    }
+    setShowReminderInput(true);
   }
 
   function cycleStatus() {
@@ -110,6 +130,18 @@ export function TaskItem({ task, onTagClick }: { task: Task; showStatus?: boolea
             </span>
           )}
 
+          {/* Reminder — the due date above is just a label; this is what actually pings. */}
+          {reminder && (
+            <button
+              title={`Reminder ${reminder.run_at ? new Date(reminder.run_at).toLocaleString() : "scheduled"} — click to remove`}
+              onClick={() => deleteAutomation.mutate(reminder.id)}
+              className="flex items-center gap-0.5 text-xs text-primary hover:text-red-500 transition-colors"
+            >
+              <BellRing className="h-3 w-3" />
+              {formatReminderTime(reminder.run_at) ?? "Reminder"}
+            </button>
+          )}
+
           {/* Tags */}
           {(task.tags ?? []).map((tag) => (
             <span
@@ -152,6 +184,22 @@ export function TaskItem({ task, onTagClick }: { task: Task; showStatus?: boolea
             </button>
           )}
 
+          {/* Reminder time picker — only needed when there is no due date to borrow. */}
+          {showReminderInput && (
+            <input
+              type="datetime-local"
+              autoFocus
+              className="text-xs border border-input rounded px-1 py-0.5 bg-background"
+              onBlur={() => setShowReminderInput(false)}
+              onChange={(e) => {
+                const val = e.target.value;
+                if (!val) return;
+                setShowReminderInput(false);
+                setTaskReminder.setReminder(task, new Date(val));
+              }}
+            />
+          )}
+
           {/* Date picker trigger */}
           {showDateInput && (
             <input
@@ -179,6 +227,16 @@ export function TaskItem({ task, onTagClick }: { task: Task; showStatus?: boolea
           onClick={() => setShowDateInput((v) => !v)}
         >
           <Calendar className="h-3.5 w-3.5" />
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon"
+          className={cn("h-7 w-7", reminder && "text-primary")}
+          title={reminder ? "Remove reminder" : "Remind me about this"}
+          disabled={setTaskReminder.isPending}
+          onClick={toggleReminder}
+        >
+          {reminder ? <BellRing className="h-3.5 w-3.5" /> : <Bell className="h-3.5 w-3.5" />}
         </Button>
         <Button
           variant="ghost"

@@ -118,6 +118,19 @@ export const api = {
       const qs = params.toString();
       return apiFetch<Automation[]>(`/api/automations${qs ? `?${qs}` : ""}`);
     },
+    create: (body: {
+      kind: AutomationKind;
+      content: string;
+      platform?: string;
+      channel_id?: string;
+      user_id?: string;
+      authorized_ids?: string[];
+      run_at?: string | null;
+      cron?: string | null;
+      task_id?: string;
+    }) => apiFetch<{ id: string }>("/api/automations", { method: "POST", body: JSON.stringify(body) }),
+    delete: (id: string) =>
+      apiFetch<void>(`/api/automations/${encodeURIComponent(id)}`, { method: "DELETE" }),
   },
   backgroundStatus: {
     get: () => apiFetch<BackgroundStatusResponse>("/api/admin/background-status"),

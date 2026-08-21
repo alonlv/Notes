@@ -79,3 +79,22 @@ export function formatDueDate(due_date: string | null): string | null {
   if (diff < 7) return `In ${diff}d`;
   return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
+
+/** Compact label for when a reminder fires. Unlike a due date, the time matters here. */
+export function formatReminderTime(run_at: string | null): string | null {
+  if (!run_at) return null;
+  const day = formatDueDate(run_at);
+  const time = new Date(run_at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  return day ? `${day}, ${time}` : time;
+}
+
+/**
+ * When to fire a reminder for a task whose due date is all we have.
+ * An all-day due date sits at midnight, which would ping at 00:00 — 9am is the useful
+ * default, matching how the backend turns an all-day task into a calendar event.
+ */
+export function defaultReminderTime(due_date: string): Date {
+  const d = new Date(due_date);
+  if (d.getHours() === 0 && d.getMinutes() === 0) d.setHours(9, 0, 0, 0);
+  return d;
+}

@@ -48,6 +48,8 @@ export interface Automation extends BaseEntity {
   last_run_at: string | null;
   snooze_count: number;
   awaiting_response: boolean;
+  /** Set when this reminder was raised from a task — links it back to that task. */
+  task_id?: string;
 }
 
 export interface ContactIdentity {
