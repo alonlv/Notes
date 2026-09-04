@@ -14,6 +14,7 @@ import { LatestApiError } from "@/components/system/ApiErrors";
 import { api } from "@/lib/api";
 import { Md } from "@/components/ui/md";
 import { cn } from "@/lib/utils";
+import { fmtTime, fmtWhen, jobLabel } from "@/lib/jobs";
 
 function greeting() {
   const h = new Date().getHours();
@@ -26,26 +27,6 @@ function endOfToday() {
   const n = new Date();
   return new Date(n.getFullYear(), n.getMonth(), n.getDate(), 23, 59, 59);
 }
-
-function fmtTime(iso: string) {
-  return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-}
-
-function fmtWhen(iso: string) {
-  const d = new Date(iso);
-  const n = new Date();
-  const sameDay = d.toDateString() === n.toDateString();
-  return sameDay ? fmtTime(iso) : d.toLocaleDateString([], { month: "short", day: "numeric" });
-}
-
-const JOB_LABELS: Record<string, string> = {
-  heartbeat: "Check-in",
-  heartbeat_cycle: "Check-in",
-  proactive_task: "Monitor",
-  trigger: "Event",
-  reminder: "Reminder",
-  memory_optimizer: "Memory tidy-up",
-};
 
 export default function DashboardPage() {
   const { selectedUserId, selectedUserName } = useSelectedUser();
@@ -94,7 +75,7 @@ export default function DashboardPage() {
               {noticed.map((r, i) => (
                 <li key={i} className="text-sm">
                   <div className="flex items-center gap-2 text-xs text-muted-foreground mb-0.5">
-                    <span className="font-medium text-foreground">{JOB_LABELS[r.job_name] ?? r.job_name}</span>
+                    <span className="font-medium text-foreground">{jobLabel(r.job_name)}</span>
                     <span>· {fmtWhen(r.started_at)}</span>
                   </div>
                   <div className="line-clamp-2 text-foreground/90"><Md className="text-sm">{r.message ?? ""}</Md></div>

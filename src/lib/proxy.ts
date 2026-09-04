@@ -33,7 +33,6 @@ export async function proxyFetch(path: string, init?: RequestInit): Promise<Next
       return new NextResponse(text, { status: res.status });
     }
   } catch (err) {
-    // eslint-disable-next-line no-console
     console.error("Backend unreachable:", err);
     return NextResponse.json({ error: "Backend service unavailable." }, { status: 503 });
   }

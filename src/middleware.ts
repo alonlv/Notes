@@ -17,14 +17,12 @@ function timingSafeEqual(a: string, b: string): boolean {
   const enc = new TextEncoder();
   const ab = enc.encode(a);
   const bb = enc.encode(b);
-  if (ab.length !== bb.length) {
-    // Still iterate over both to prevent length-based timing leak
-    let diff = ab.length ^ bb.length;
-    for (let i = 0; i < Math.min(ab.length, bb.length); i++) diff |= ab[i] ^ bb[i];
-    return false;
-  }
-  let diff = 0;
-  for (let i = 0; i < ab.length; i++) diff |= ab[i] ^ bb[i];
+  // One path for both cases: a length difference is folded into the same
+  // accumulator as a byte difference, so a wrong-length token takes the same
+  // route as a wrong-value one instead of a shorter branch of its own.
+  let diff = ab.length ^ bb.length;
+  const len = Math.min(ab.length, bb.length);
+  for (let i = 0; i < len; i++) diff |= ab[i] ^ bb[i];
   return diff === 0;
 }
 

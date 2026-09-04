@@ -2,35 +2,23 @@
 
 import Link from "next/link";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
-import { FileText, CheckSquare, MessageSquare, Zap, Brain, Settings, LogOut, Plus, Hash, Users, X, Moon, Sun, CalendarDays, LayoutDashboard, Inbox } from "lucide-react";
+import { LogOut, Plus, Hash, Users, X, Moon, Sun } from "lucide-react";
 import { useTheme } from "@/context/theme-context";
 import { cn } from "@/lib/utils";
+import { AGENT_NAV, MAIN_NAV, isActive, type NavItem } from "@/lib/nav";
 import { useTopics, useCreateTopic } from "@/hooks/use-topics";
 import { useContacts } from "@/hooks/use-contacts";
+import { useLogout } from "@/hooks/use-logout";
 import { useSelectedUser } from "@/context/user-context";
 import { TOPIC_DOT } from "@/components/notes/TopicFilter";
 import { useState } from "react";
-
-const MAIN_NAV = [
-  { href: "/", label: "Home", icon: LayoutDashboard },
-  { href: "/notes", label: "Notes", icon: FileText },
-  { href: "/tasks", label: "Tasks", icon: CheckSquare },
-  { href: "/calendar", label: "Calendar", icon: CalendarDays },
-  { href: "/chat", label: "Chat", icon: MessageSquare },
-  { href: "/feed", label: "Inbox", icon: Inbox },
-];
-
-const AGENT_NAV = [
-  { href: "/automations", label: "Automations", icon: Zap },
-  { href: "/memories", label: "Memory", icon: Brain },
-  { href: "/admin", label: "Admin", icon: Settings },
-];
 
 export function Sidebar() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const router = useRouter();
   const activeTopic = searchParams.get("topic");
+  const logout = useLogout();
 
   const { data: topics = [] } = useTopics();
   const { data: contacts = [] } = useContacts();
@@ -41,12 +29,6 @@ export function Sidebar() {
   const [showNewTopic, setShowNewTopic] = useState(false);
   const [newTopicName, setNewTopicName] = useState("");
 
-  async function handleLogout() {
-    await fetch("/api/auth/logout", { method: "POST" });
-    router.push("/login");
-    router.refresh();
-  }
-
   async function handleCreateTopic() {
     const name = newTopicName.trim();
     if (!name) { setShowNewTopic(false); return; }
@@ -56,8 +38,9 @@ export function Sidebar() {
     router.push(`/notes?topic=${encodeURIComponent(name.toLowerCase())}`);
   }
 
-  function navLink(href: string, label: string, Icon: React.ElementType) {
-    const active = (href === "/" ? pathname === "/" : pathname.startsWith(href)) && !activeTopic;
+  // A selected topic is its own destination, so no section reads as current.
+  function navLink({ href, label, icon: Icon }: NavItem) {
+    const active = isActive(href, pathname) && !activeTopic;
     return (
       <Link
         key={href}
@@ -79,7 +62,7 @@ export function Sidebar() {
         <h1 className="text-lg font-semibold tracking-tight">My Workspace</h1>
       </div>
 
-      {MAIN_NAV.map(({ href, label, icon }) => navLink(href, label, icon))}
+      {MAIN_NAV.map(navLink)}
 
       {/* People / User selector */}
       {contacts.length > 0 && (
@@ -165,14 +148,14 @@ export function Sidebar() {
         )}
 
         {topics.map((topic) => {
-          const isActive = activeTopic === topic.name && pathname.startsWith("/notes");
+          const isCurrent = activeTopic === topic.name && pathname.startsWith("/notes");
           return (
             <Link
               key={topic.id}
               href={`/notes?topic=${encodeURIComponent(topic.name)}`}
               className={cn(
                 "flex items-center gap-2.5 rounded-md px-3 py-1.5 text-sm transition-colors",
-                isActive ? "bg-accent text-accent-foreground font-medium" : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                isCurrent ? "bg-accent text-accent-foreground font-medium" : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
               )}
             >
               <span className={cn("w-2 h-2 rounded-full shrink-0", TOPIC_DOT[topic.color] ?? "bg-gray-400")} />
@@ -188,7 +171,7 @@ export function Sidebar() {
         <div className="px-3 mb-1">
           <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Agent</span>
         </div>
-        {AGENT_NAV.map(({ href, label, icon }) => navLink(href, label, icon))}
+        {AGENT_NAV.map(navLink)}
       </div>
 
       <div className="mt-auto flex flex-col gap-1">
@@ -200,7 +183,7 @@ export function Sidebar() {
           {theme === "dark" ? "Light mode" : "Dark mode"}
         </button>
         <button
-          onClick={handleLogout}
+          onClick={logout}
           className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
         >
           <LogOut className="h-4 w-4" />

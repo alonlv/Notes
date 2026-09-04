@@ -7,7 +7,7 @@ import { useSelectedUser } from "@/context/user-context";
 
 export function MobileContactsBar() {
   const { data: contacts = [] } = useContacts();
-  const { selectedUserId, selectedUserName, setSelectedUser, clearSelectedUser } = useSelectedUser();
+  const { selectedUserId, setSelectedUser, clearSelectedUser } = useSelectedUser();
 
   if (contacts.length === 0) return null;
 

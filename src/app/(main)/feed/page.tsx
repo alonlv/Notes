@@ -4,27 +4,13 @@ import { Sparkles, RefreshCw } from "lucide-react";
 import { useBackgroundStatus, flattenRuns } from "@/hooks/use-background-status";
 import { Md } from "@/components/ui/md";
 import { cn } from "@/lib/utils";
-
-const JOB_LABELS: Record<string, string> = {
-  heartbeat: "Check-in",
-  heartbeat_cycle: "Check-in",
-  proactive_task: "Monitor",
-  trigger: "Event",
-  reminder: "Reminder",
-  memory_optimizer: "Memory tidy-up",
-};
+import { fmtDateTime, jobLabel } from "@/lib/jobs";
 
 const STATUS_DOT: Record<string, string> = {
   ok: "bg-emerald-500",
   skip: "bg-muted-foreground/40",
   error: "bg-red-500",
 };
-
-function fmt(iso: string) {
-  return new Date(iso).toLocaleString([], {
-    month: "short", day: "numeric", hour: "2-digit", minute: "2-digit",
-  });
-}
 
 export default function FeedPage() {
   const { data, isLoading, refetch, isFetching } = useBackgroundStatus();
@@ -63,8 +49,8 @@ export default function FeedPage() {
               <span className={cn("mt-1.5 h-2 w-2 shrink-0 rounded-full", STATUS_DOT[r.status] ?? "bg-muted-foreground/40")} />
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                  <span className="font-medium text-foreground">{JOB_LABELS[r.job_name] ?? r.job_name}</span>
-                  <span>· {fmt(r.started_at)}</span>
+                  <span className="font-medium text-foreground">{jobLabel(r.job_name)}</span>
+                  <span>· {fmtDateTime(r.started_at)}</span>
                   {r.status === "error" && <span className="text-red-500">· failed</span>}
                 </div>
                 {r.message ? (

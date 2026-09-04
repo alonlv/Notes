@@ -28,8 +28,10 @@ export default function NotePage({ params }: { params: Promise<{ id: string }> }
         <div className="h-8 w-32 rounded bg-muted animate-pulse mb-8" />
         <div className="h-10 w-3/4 rounded bg-muted animate-pulse mb-6" />
         <div className="space-y-3">
-          {[...Array(5)].map((_, i) => (
-            <div key={i} className="h-4 rounded bg-muted animate-pulse" style={{ width: `${70 + Math.random() * 30}%` }} />
+          {/* Fixed widths, not random ones: a skeleton that renders differently
+              on the server and the client is a hydration mismatch. */}
+          {[92, 78, 85, 71, 88].map((width, i) => (
+            <div key={i} className="h-4 rounded bg-muted animate-pulse" style={{ width: `${width}%` }} />
           ))}
         </div>
       </div>

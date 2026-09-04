@@ -124,13 +124,14 @@ export function MemoryGraph({
   }, []);
 
   // A fresh copy per payload: the layout mutates whatever it is handed.
-  const graphData = useMemo(() => {
-    fitted.current = false;
-    return {
-      nodes: data.nodes.map((node) => ({ ...node })),
-      links: data.links.map((link) => ({ ...link })),
-    };
-  }, [data]);
+  const graphData = useMemo(() => ({
+    nodes: data.nodes.map((node) => ({ ...node })),
+    links: data.links.map((link) => ({ ...link })),
+  }), [data]);
+
+  // New data deserves a new fit. Set after render rather than inside the memo —
+  // the engine does not settle until long after either, so nothing is missed.
+  useEffect(() => { fitted.current = false; }, [graphData]);
 
   const nodesById = useMemo(
     () => new Map(data.nodes.map((node) => [node.id, node])),

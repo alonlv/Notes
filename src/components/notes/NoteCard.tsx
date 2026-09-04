@@ -1,5 +1,5 @@
 import Link from "next/link";
-import type { Note, Topic } from "@/types/api";
+import type { Note } from "@/types/api";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { TOPIC_DOT } from "@/components/notes/TopicFilter";
