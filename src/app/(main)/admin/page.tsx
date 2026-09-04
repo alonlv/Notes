@@ -3,8 +3,9 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { RotateCcw, Save, Plus, Trash2, ChevronDown, ChevronUp, GripVertical, Settings, Cpu, Users, Brain, FileText, Database, Activity, Zap, type LucideIcon } from "lucide-react";
+import { RotateCcw, Save, Plus, Trash2, ChevronDown, ChevronUp, GripVertical, Settings, Cpu, Users, Brain, FileText, Database, Activity, Zap, AlertTriangle, type LucideIcon } from "lucide-react";
 import { apiFetch } from "@/lib/api";
+import { ApiErrorsPanel } from "@/components/system/ApiErrors";
 import type { BackgroundStatusResponse, Contact, JobRun, JobStatus, RouterMetricsResponse } from "@/types/api";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -42,7 +43,7 @@ interface Toast {
   type: "success" | "error" | "info";
 }
 
-type Tab = "general" | "prompt" | "providers" | "contacts" | "data" | "heartbeat" | "memory" | "background";
+type Tab = "general" | "prompt" | "providers" | "contacts" | "data" | "heartbeat" | "memory" | "background" | "errors";
 
 type Group = "settings" | "ai" | "system";
 
@@ -77,6 +78,7 @@ const NAV_GROUPS: NavGroup[] = [
       { id: "data",       label: "Data",       icon: Database },
       { id: "heartbeat",  label: "Heartbeat",  icon: Zap },
       { id: "background", label: "Background", icon: Activity },
+      { id: "errors",     label: "Errors",     icon: AlertTriangle },
     ],
   },
 ];
@@ -107,6 +109,8 @@ function useToasts() {
 }
 
 // ─── Page ────────────────────────────────────────────────────────────────────
+
+const ALL_TABS: Tab[] = NAV_GROUPS.flatMap((g) => g.tabs.map((t) => t.id));
 
 export default function AdminPage() {
   const [tab, setTab] = useState<Tab>("general");
@@ -145,6 +149,12 @@ export default function AdminPage() {
   }, []);
 
   useEffect(() => { loadConfig(); }, [loadConfig]);
+
+  // Deep link (?tab=errors) so the dashboard's error banner can link straight here.
+  useEffect(() => {
+    const requested = new URLSearchParams(window.location.search).get("tab");
+    if (requested && (ALL_TABS as string[]).includes(requested)) setTab(requested as Tab);
+  }, []);
 
   // Cmd+S → save current tab
   useEffect(() => {
@@ -668,6 +678,11 @@ export default function AdminPage() {
       {/* ── Background status ──────────────────────────────────────────────── */}
       {tab === "background" && (
         <BackgroundStatusPanel />
+      )}
+
+      {/* ── API errors ─────────────────────────────────────────────────────── */}
+      {tab === "errors" && (
+        <ApiErrorsPanel />
       )}
 
       {/* Toasts */}

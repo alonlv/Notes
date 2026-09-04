@@ -1,4 +1,4 @@
-import type { Automation, AutomationKind, BackgroundStatusResponse, CalendarConnectionStatus, Note, Priority, RouterMetricsResponse, Task, TaskStatus, Topic } from "@/types/api";
+import type { ApiErrorsResponse, Automation, AutomationKind, BackgroundStatusResponse, CalendarConnectionStatus, Note, Priority, RouterMetricsResponse, Task, TaskStatus, Topic } from "@/types/api";
 
 export interface ChatTurn {
   role: "user" | "assistant";
@@ -124,6 +124,14 @@ export const api = {
   },
   routerMetrics: {
     get: () => apiFetch<RouterMetricsResponse>("/api/admin/router-metrics"),
+  },
+  apiErrors: {
+    get: (limit = 25, source?: string) => {
+      const params = new URLSearchParams({ limit: String(limit) });
+      if (source) params.set("source", source);
+      return apiFetch<ApiErrorsResponse>(`/api/admin/api-errors?${params}`);
+    },
+    clear: () => apiFetch<{ ok: boolean }>("/api/admin/api-errors", { method: "DELETE" }),
   },
   chat: {
     send: (message: string, userId?: string) =>
