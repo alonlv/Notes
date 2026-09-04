@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 import { authenticate, stubBackend } from "./fixtures";
 
 test.describe("app shell", () => {
@@ -21,16 +21,7 @@ test.describe("app shell", () => {
 
   test("admin opens on the tab the query string asks for", async ({ page, context }) => {
     await authenticate(context);
-    await stubBackend(page);
-    // Registered after the blanket stub so these win — Playwright tries the most
-    // recently added route first. Admin needs a config object rather than the
-    // empty list, or it renders its load-failed state instead of any tabs.
-    await page.route("**/api/admin/config", (route) =>
-      route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ effective: {} }) }),
-    );
-    await page.route("**/api/admin/config/defaults", (route) =>
-      route.fulfill({ status: 200, contentType: "application/json", body: "{}" }),
-    );
+    await stubAdmin(page);
 
     await page.goto("/admin?tab=errors");
 
@@ -39,4 +30,85 @@ test.describe("app shell", () => {
     await expect(page.getByRole("button", { name: "Errors" })).toBeVisible();
     await expect(page.getByText("No API errors recorded")).toBeVisible();
   });
+
+  test("every admin tab renders", async ({ page, context }) => {
+    // The panels live in their own modules now; this walks all nine so a bad
+    // import or a missing prop shows up as a failing test rather than a blank
+    // tab nobody opened.
+    await authenticate(context);
+    await stubAdmin(page);
+
+    const errors: string[] = [];
+    page.on("pageerror", (e) => errors.push(e.message));
+
+    // Reached by deep link rather than by clicking through the group headers —
+    // it is the same setTab, and it does not depend on the nav's shape.
+    const tabs: [string, string][] = [
+      ["general", "Agent Identity"],
+      ["providers", "Add provider"],
+      ["contacts", "Add person"],
+      ["prompt", "Core Behavior"],
+      ["memory", "How memory consolidation works"],
+      ["data", "Load Data"],
+      ["heartbeat", "How heartbeat works"],
+      ["background", "LLM Router"],
+      ["errors", "No API errors recorded"],
+    ];
+
+    for (const [tab, marker] of tabs) {
+      await page.goto(`/admin?tab=${tab}`);
+      await expect(page.getByText(marker).first()).toBeVisible();
+    }
+
+    expect(errors).toEqual([]);
+  });
 });
+
+/** Admin needs a config object rather than the blanket empty list, or it renders
+ *  its load-failed state instead of any tabs. Registered after the blanket stub
+ *  so these win — Playwright tries the most recently added route first. */
+async function stubAdmin(page: Page): Promise<void> {
+  await stubBackend(page);
+  await page.route("**/api/admin/config", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      // The prompt fields are part of the real response and the Prompts tab
+      // renders their length, so a stub without them is not a fair stand-in.
+      body: JSON.stringify({
+        effective: {
+          agent_name: "Alexander",
+          agent_timezone: "Asia/Jerusalem",
+          llm_providers: [],
+          prompt_core: "core",
+          prompt_memory: "memory",
+          prompt_proactive: "proactive",
+          prompt_notes: "notes",
+        },
+      }),
+    }),
+  );
+  await page.route("**/api/admin/config/defaults", (route) =>
+    route.fulfill({ status: 200, contentType: "application/json", body: "{}" }),
+  );
+  await page.route("**/api/admin/contacts", (route) =>
+    route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ contacts: [] }) }),
+  );
+  await page.route("**/api/admin/background-status", (route) =>
+    route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ jobs: {} }) }),
+  );
+  await page.route("**/api/admin/router-metrics", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ total: 0, by_target: {}, by_kind: {}, providers: [], recent: [] }),
+    }),
+  );
+  await page.route("**/api/admin/api-errors**", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ total: 0, by_source: {}, latest: null, recent: [] }),
+    }),
+  );
+}

@@ -9,7 +9,7 @@ import type { ToastFn } from "./types";
 
 // ─── Heartbeat panel ──────────────────────────────────────────────────────────
 
-export const HEARTBEAT_EVENT =
+const HEARTBEAT_EVENT =
   "Manual heartbeat test from Admin panel. Check if there is anything worth " +
   "reporting for this user right now.";
 
