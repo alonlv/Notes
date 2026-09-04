@@ -74,6 +74,67 @@ export interface Memory {
   authorized_ids?: string[];
 }
 
+/** Why two memories are linked. Every link carries exactly one reason. */
+export type MemoryLinkKind = "semantic" | "topic" | "entity";
+
+export interface MemoryGraphNode {
+  id: string;
+  content: string;
+  topics: string[];
+  category: string;
+  kind: string;
+  /** Which context the memory was grouped into; -1 when nothing links to it. */
+  cluster: number;
+  cluster_label: string;
+  centrality: number;
+  degree: number;
+  created_at: string | null;
+}
+
+export interface MemoryGraphLink {
+  source: string;
+  target: string;
+  kind: MemoryLinkKind;
+  weight: number;
+}
+
+export interface MemoryCluster {
+  id: number;
+  label: string;
+  size: number;
+}
+
+/** The whole memory store as a graph — what the Memory page draws. */
+export interface MemoryGraph {
+  owner_id: string;
+  nodes: MemoryGraphNode[];
+  links: MemoryGraphLink[];
+  clusters: MemoryCluster[];
+  stats: {
+    memories: number;
+    links: number;
+    clusters: number;
+    unlinked: number;
+    density: number;
+  };
+}
+
+/** A memory reached from another one, with the reason it came along. */
+export interface RelatedMemory {
+  id: string;
+  content: string;
+  metadata: Record<string, unknown>;
+  score: number;
+  connected_via: {
+    id?: string;
+    content?: string;
+    kind?: MemoryLinkKind;
+    reason?: string;
+    weight?: number;
+    hops?: number;
+  };
+}
+
 /** Status of the user's connected REAL calendars (Google / Apple). */
 export interface CalendarConnectionStatus {
   user_id: string;
