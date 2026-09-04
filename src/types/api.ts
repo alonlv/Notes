@@ -122,3 +122,29 @@ export interface RouterMetricsResponse {
     duration_ms: number | null;
   }[];
 }
+
+/** Where a recorded failure came from: our own endpoints, an LLM provider, or
+ *  anything else in the backend that logged an error. */
+export type ApiErrorSource = "http" | "llm" | "app";
+
+export interface ApiErrorEvent {
+  at: string;
+  first_at: string;
+  /** Identical back-to-back failures collapse into one entry with a count. */
+  count: number;
+  source: ApiErrorSource;
+  /** "POST /chat", a provider base_url, or the logger that reported it. */
+  label: string;
+  error_type: string;
+  message: string;
+  status_code: number | null;
+  detail: string | null;
+  user_id: string | null;
+}
+
+export interface ApiErrorsResponse {
+  total: number;
+  by_source: Partial<Record<ApiErrorSource, number>>;
+  latest: ApiErrorEvent | null;
+  recent: ApiErrorEvent[];
+}

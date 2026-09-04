@@ -10,6 +10,7 @@ import { useTasks } from "@/hooks/use-tasks";
 import { useAutomations } from "@/hooks/use-automations";
 import { useCalendarConnection } from "@/hooks/use-calendar-connection";
 import { useBackgroundStatus, notifyingRuns } from "@/hooks/use-background-status";
+import { LatestApiError } from "@/components/system/ApiErrors";
 import { api } from "@/lib/api";
 import { Md } from "@/components/ui/md";
 import { cn } from "@/lib/utils";
@@ -79,6 +80,9 @@ export default function DashboardPage() {
       </header>
 
       <QuickAsk userId={selectedUserId || undefined} />
+
+      {/* Only renders when something actually failed — silence means healthy. */}
+      <LatestApiError className="mt-4" />
 
       <div className="grid gap-4 md:grid-cols-2 mt-4">
         {/* Agent noticed */}
