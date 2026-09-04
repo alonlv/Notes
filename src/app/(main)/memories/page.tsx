@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Md } from "@/components/ui/md";
 import { MemoryGraph, clusterColor } from "@/components/memories/MemoryGraph";
+import { PeoplePicker, togglePersonId } from "@/components/ui/PeoplePicker";
 import { api, type MemoryWrite } from "@/lib/api";
 import type { Memory, MemoryGraph as MemoryGraphData } from "@/types/api";
 import { useContacts } from "@/hooks/use-contacts";
@@ -67,13 +68,6 @@ function MemoryForm({
   contacts: Array<{ canonical_id: string; name: string }>;
 }) {
   const [s, setS] = useState(initial);
-  const togglePerson = (id: string) =>
-    setS((p) => ({
-      ...p,
-      authorized_ids: p.authorized_ids.includes(id)
-        ? p.authorized_ids.filter((x) => x !== id)
-        : [...p.authorized_ids, id],
-    }));
   return (
     <div className="rounded-lg border border-border bg-muted/30 p-4 space-y-3">
       <div>
@@ -105,24 +99,11 @@ function MemoryForm({
           One memory can belong to several topics — it&apos;s stored once, not duplicated.
         </p>
       </div>
-      {contacts.length > 0 && (
-        <div>
-          <label className="text-xs text-muted-foreground mb-1 block">People</label>
-          <div className="flex flex-wrap gap-x-4 gap-y-1.5">
-            {contacts.map((c) => (
-              <label key={c.canonical_id} className="flex items-center gap-1.5 text-sm cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={s.authorized_ids.includes(c.canonical_id)}
-                  onChange={() => togglePerson(c.canonical_id)}
-                  className="h-3.5 w-3.5 accent-primary"
-                />
-                {c.name}
-              </label>
-            ))}
-          </div>
-        </div>
-      )}
+      <PeoplePicker
+        contacts={contacts}
+        selected={s.authorized_ids}
+        onToggle={(id) => setS((p) => ({ ...p, authorized_ids: togglePersonId(p.authorized_ids, id) }))}
+      />
       <div className="flex gap-2 justify-end">
         <Button variant="ghost" size="sm" onClick={onCancel} disabled={saving}>
           <X className="h-3.5 w-3.5 mr-1" /> Cancel

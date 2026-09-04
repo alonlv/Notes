@@ -5,8 +5,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { X, Check } from "lucide-react";
+import { PeoplePicker, togglePersonId } from "@/components/ui/PeoplePicker";
+import { platformOptions } from "@/lib/platforms";
 
-const PLATFORMS = ["telegram", "slack", "webex", "whatsapp"];
 
 export interface ScheduledFormState {
   /** Main text field — "message" for reminders, "instruction" for monitors */
@@ -101,14 +102,6 @@ export function ScheduledItemForm({
   const [f, setF] = useState(initial);
   const set = (k: keyof Omit<ScheduledFormState, "authorized_ids">, v: string) =>
     setF((p) => ({ ...p, [k]: v }));
-  const togglePerson = (id: string) =>
-    setF((p) => ({
-      ...p,
-      authorized_ids: p.authorized_ids.includes(id)
-        ? p.authorized_ids.filter((x) => x !== id)
-        : [...p.authorized_ids, id],
-    }));
-
   return (
     <div className="rounded-lg border border-border bg-muted/30 p-4 space-y-3">
       <div>
@@ -127,9 +120,7 @@ export function ScheduledItemForm({
             onChange={(e) => set("platform", e.target.value)}
             className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
           >
-            {PLATFORMS.map((p) => (
-              <option key={p} value={p}>{p}</option>
-            ))}
+            {platformOptions()}
           </select>
         </div>
         <div>
@@ -141,24 +132,11 @@ export function ScheduledItemForm({
           />
         </div>
       </div>
-      {contacts.length > 0 && (
-        <div>
-          <label className="text-xs text-muted-foreground mb-1 block">People</label>
-          <div className="flex flex-wrap gap-x-4 gap-y-1.5">
-            {contacts.map((c) => (
-              <label key={c.canonical_id} className="flex items-center gap-1.5 text-sm cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={f.authorized_ids.includes(c.canonical_id)}
-                  onChange={() => togglePerson(c.canonical_id)}
-                  className="h-3.5 w-3.5 accent-primary"
-                />
-                {c.name}
-              </label>
-            ))}
-          </div>
-        </div>
-      )}
+      <PeoplePicker
+        contacts={contacts}
+        selected={f.authorized_ids}
+        onToggle={(id) => setF((p) => ({ ...p, authorized_ids: togglePersonId(p.authorized_ids, id) }))}
+      />
       <div>
         <label className="text-xs text-muted-foreground mb-1 block">Schedule</label>
         <div className="flex gap-2 mb-2">

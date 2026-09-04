@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import type { Contact } from "@/types/api";
 import { LabeledInput, PlatformBadge } from "./primitives";
 import { DEFAULT_PROVIDER, type LlmProvider } from "./types";
+import { platformOptions } from "@/lib/platforms";
 
 // ─── Contact card ─────────────────────────────────────────────────────────────
 
@@ -109,10 +110,7 @@ export function ContactCard({
                 onChange={(e) => setNewPlatform(e.target.value)}
                 className="rounded-lg border border-input bg-background px-2.5 py-1.5 text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring min-w-[110px]"
               >
-                <option value="telegram">Telegram</option>
-                <option value="whatsapp">WhatsApp</option>
-                <option value="slack">Slack</option>
-                <option value="webex">Webex</option>
+                {platformOptions()}
               </select>
               <input
                 type="text"
@@ -158,10 +156,7 @@ export function ContactCard({
                 onChange={(e) => setChannelPlatform(e.target.value)}
                 className="rounded-lg border border-input bg-background px-2.5 py-1.5 text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring min-w-[110px]"
               >
-                <option value="telegram">Telegram</option>
-                <option value="whatsapp">WhatsApp</option>
-                <option value="slack">Slack</option>
-                <option value="webex">Webex</option>
+                {platformOptions()}
               </select>
               <input
                 type="text"
