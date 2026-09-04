@@ -4,19 +4,20 @@ import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import type { JobRun } from "@/types/api";
 
-export function useBackgroundStatus() {
+/** Pass 0 to stop polling — the admin panel lets the reader choose the rate. */
+export function useBackgroundStatus(refetchInterval: number | false = 60_000) {
   return useQuery({
     queryKey: ["background-status"],
     queryFn: () => api.backgroundStatus.get(),
-    refetchInterval: 60_000,
+    refetchInterval: refetchInterval || false,
   });
 }
 
-export function useRouterMetrics() {
+export function useRouterMetrics(refetchInterval: number | false = 30_000) {
   return useQuery({
     queryKey: ["router-metrics"],
     queryFn: () => api.routerMetrics.get(),
-    refetchInterval: 30_000,
+    refetchInterval: refetchInterval || false,
   });
 }
 

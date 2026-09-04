@@ -35,6 +35,18 @@ function authorizedIds(selectedUserId: string | null, ticked: string[]): string[
   return [...new Set([selectedUserId, ...ticked].filter((v): v is string => Boolean(v)))];
 }
 
+/** Who this memory is shared with. The metadata copy wins where it exists —
+ *  older rows carry the list only there — then the column, then the owner. */
+function peopleFor(m: Memory): string[] {
+  const fromMetadata = (m.metadata as { authorized_ids?: unknown })?.authorized_ids;
+  if (Array.isArray(fromMetadata) && fromMetadata.length) {
+    return fromMetadata.filter((v): v is string => typeof v === "string");
+  }
+  if (m.authorized_ids?.length) return m.authorized_ids;
+  const owner = m.owner_id || m.user_id;
+  return owner ? [owner] : [];
+}
+
 /** Read the topics array off a memory's metadata, tolerating missing/malformed values. */
 function memoryTopics(m: Memory): string[] {
   const raw = (m.metadata as { topics?: unknown })?.topics;
@@ -271,9 +283,10 @@ export default function MemoriesPage() {
               </button>
             ))}
             {(() => {
-              const ids: string[] = (m.metadata as any)?.authorized_ids?.length ? (m.metadata as any).authorized_ids : m.authorized_ids?.length ? m.authorized_ids : (m.owner_id || m.user_id) ? [m.owner_id || m.user_id || ""] : [];
-              if (!ids.length) return null;
-              const names = ids.map((id: string) => contacts.find((c) => c.canonical_id === id)?.name ?? id.replace(/^person:/, ""));
+              const names = peopleFor(m).map(
+                (id) => contacts.find((c) => c.canonical_id === id)?.name ?? id.replace(/^person:/, ""),
+              );
+              if (!names.length) return null;
               return <span className="text-xs text-muted-foreground/50 truncate">{names.join(", ")}</span>;
             })()}
           </div>
