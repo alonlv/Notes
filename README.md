@@ -33,7 +33,14 @@ One-time or recurring (cron) reminders sent to any configured platform channel. 
 Background tasks the agent runs on a schedule and reports only when there is something worth saying. Configure with a plain-language instruction and a cron schedule.
 
 ### Memories
-Semantic memory entries with optional category. Full text search against the backend's memory store.
+Semantic memory entries with optional category. Full text search against the backend's memory
+store. Two views of the same store, switchable from the header:
+
+- **List** — search, add, edit and delete entries, filtered by topic.
+- **Graph** — the memory graph drawn as a force-directed map (`react-force-graph-2d`), one
+  colour per context. Node size is how connected a memory is; link colour is *why* two
+  memories are linked — similar meaning, same topic, or naming the same thing. Click a node
+  to read it and see everything it connects to; click a context chip to focus on it.
 
 ### Admin
 Runtime configuration for the AI backend:
@@ -72,6 +79,7 @@ All backend calls go through Next.js API route handlers under `/api/` to keep th
 | `/api/proactive-tasks/[id]` | Update / delete a monitor |
 | `/api/memories` | List / create memories |
 | `/api/memories/[id]` | Update / delete a memory |
+| `/api/memories/graph` | The memory graph: nodes, links, clusters and stats |
 | `/api/admin/config` | Get / update runtime config |
 | `/api/admin/contacts` | List contacts |
 | `/api/admin/contacts/[id]/data` | Update contact attributes |

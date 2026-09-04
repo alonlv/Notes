@@ -1,13 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Trash2, Brain, Search, RefreshCw, AlertCircle, Plus, Pencil, X, Check } from "lucide-react";
+import { Trash2, Brain, Search, RefreshCw, AlertCircle, Plus, Pencil, X, Check, List, Network } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Md } from "@/components/ui/md";
-import type { Memory } from "@/types/api";
+import { MemoryGraph } from "@/components/memories/MemoryGraph";
+import type { Memory, MemoryGraph as MemoryGraphData } from "@/types/api";
 import { useContacts } from "@/hooks/use-contacts";
 import { useSelectedUser } from "@/context/user-context";
 import { Users } from "lucide-react";
@@ -122,6 +123,9 @@ export default function MemoriesPage() {
   const [showAdd, setShowAdd] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [topicFilter, setTopicFilter] = useState<string | null>(null);
+  const [view, setView] = useState<"list" | "graph">("list");
+  const [highlightId, setHighlightId] = useState<string | null>(null);
+  const highlightRef = useRef<HTMLDivElement | null>(null);
   const qc = useQueryClient();
   const { data: contacts = [] } = useContacts();
   const { selectedUserId, selectedUserName } = useSelectedUser();
@@ -137,25 +141,51 @@ export default function MemoriesPage() {
     },
   });
 
+  // The graph is served whole rather than searched, so it only depends on who is
+  // selected and which topic (if any) the view is scoped to.
+  const { data: graph, isLoading: graphLoading, error: graphError } = useQuery<MemoryGraphData>({
+    queryKey: ["memory-graph", selectedUserId, topicFilter],
+    enabled: view === "graph" && !!selectedUserId,
+    queryFn: () => {
+      const params = new URLSearchParams({ user_id: selectedUserId! });
+      if (topicFilter) params.set("topics", topicFilter);
+      return fetch(`/api/memories/graph?${params.toString()}`).then((r) => r.json());
+    },
+  });
+
+  // Jumping from a node to its entry in the list is only useful if you land on it.
+  useEffect(() => {
+    if (view === "list" && highlightId) {
+      highlightRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+  }, [view, highlightId]);
+
+  // Writing a memory redraws the graph as well — the two views show the same store.
+  function invalidateMemories() {
+    qc.invalidateQueries({ queryKey: ["memories"] });
+    qc.invalidateQueries({ queryKey: ["memory-graph"] });
+  }
+
   const create = useMutation({
     mutationFn: (body: object) =>
       fetch("/api/memories", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).then((r) => r.json()),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["memories"] }); setShowAdd(false); },
+    onSuccess: () => { invalidateMemories(); setShowAdd(false); },
   });
 
   const update = useMutation({
     mutationFn: ({ id, body }: { id: string; body: object }) =>
       fetch(`/api/memories/${id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).then((r) => r.json()),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["memories"] }); setEditId(null); },
+    onSuccess: () => { invalidateMemories(); setEditId(null); },
   });
 
   const del = useMutation({
     mutationFn: (id: string) => fetch(`/api/memories/${id}`, { method: "DELETE" }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["memories"] }),
+    onSuccess: () => invalidateMemories(),
   });
 
   function handleSearch(e: React.FormEvent) {
     e.preventDefault();
+    setHighlightId(null);
     setSubmitted(query);
   }
 
@@ -176,7 +206,27 @@ export default function MemoriesPage() {
           )}
         </div>
         <div className="flex gap-2">
-          <Button variant="ghost" size="sm" onClick={() => qc.invalidateQueries({ queryKey: ["memories"] })}>
+          <div className="flex items-center rounded-md border border-border p-0.5">
+            {([["list", List], ["graph", Network]] as const).map(([mode, Icon]) => (
+              <button
+                key={mode}
+                onClick={() => { setView(mode); if (mode === "graph") setHighlightId(null); }}
+                title={mode === "list" ? "List" : "Graph"}
+                aria-label={mode === "list" ? "List view" : "Graph view"}
+                aria-pressed={view === mode}
+                className={`rounded px-2 py-1 transition-colors ${
+                  view === mode ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                <Icon className="h-4 w-4" />
+              </button>
+            ))}
+          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => qc.invalidateQueries({ queryKey: [view === "graph" ? "memory-graph" : "memories"] })}
+          >
             <RefreshCw className="h-4 w-4" />
           </Button>
           {selectedUserId && (
@@ -216,18 +266,20 @@ export default function MemoriesPage() {
         </div>
       )}
 
-      <form onSubmit={handleSearch} className="flex gap-2 mb-6">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            className="pl-9"
-            placeholder="Search memories…"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-          />
-        </div>
-        <Button type="submit">Search</Button>
-      </form>
+      {view === "list" && (
+        <form onSubmit={handleSearch} className="flex gap-2 mb-6">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              className="pl-9"
+              placeholder="Search memories…"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+            />
+          </div>
+          <Button type="submit">Search</Button>
+        </form>
+      )}
 
       {allTopics.length > 0 && (
         <div className="flex flex-wrap gap-1.5 mb-6">
@@ -257,7 +309,21 @@ export default function MemoriesPage() {
         </div>
       )}
 
-      {isLoading ? (
+      {view === "graph" ? (
+        !selectedUserId ? null : graphError ? (
+          <div className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+            <AlertCircle className="h-4 w-4 shrink-0" />
+            Could not load the memory graph.
+          </div>
+        ) : graphLoading || !graph ? (
+          <div className="h-[380px] animate-pulse rounded-lg bg-muted md:h-[520px]" />
+        ) : (
+          <MemoryGraph
+            data={graph}
+            onOpenMemory={(id) => { setHighlightId(id); setView("list"); }}
+          />
+        )
+      ) : isLoading ? (
         <div className="space-y-2">
           {[...Array(5)].map((_, i) => <div key={i} className="h-14 rounded-lg bg-muted animate-pulse" />)}
         </div>
@@ -290,7 +356,13 @@ export default function MemoriesPage() {
                 contacts={contacts}
               />
             ) : (
-              <div key={m.id} className="flex items-start gap-3 rounded-lg border border-border p-3">
+              <div
+                key={m.id}
+                ref={highlightId === m.id ? highlightRef : undefined}
+                className={`flex items-start gap-3 rounded-lg border p-3 transition-colors ${
+                  highlightId === m.id ? "border-primary ring-1 ring-primary/40" : "border-border"
+                }`}
+              >
                 <Brain className="h-4 w-4 shrink-0 mt-0.5 text-muted-foreground" />
                 <div className="flex-1 min-w-0">
                   <Md className="text-sm">{m.content}</Md>
