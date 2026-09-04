@@ -1,17 +1,36 @@
-import type { ApiErrorsResponse, Automation, AutomationKind, BackgroundStatusResponse, CalendarConnectionStatus, Note, Priority, RouterMetricsResponse, Task, TaskStatus, Topic } from "@/types/api";
+import type {
+  ApiErrorsResponse,
+  Automation,
+  AutomationKind,
+  BackgroundStatusResponse,
+  CalendarConnectionStatus,
+  Contact,
+  Memory,
+  MemoryGraph,
+  Note,
+  Priority,
+  RouterMetricsResponse,
+  Task,
+  TaskStatus,
+  Topic,
+} from "@/types/api";
 
 export interface ChatTurn {
   role: "user" | "assistant";
   text: string;
 }
 
+/**
+ * The one place a response is turned into data. It throws on a failed request,
+ * which is what lets every caller — and react-query's `error` — tell a real
+ * answer from an error payload. Calling `res.json()` directly, as several pages
+ * used to, hands `{error: "..."}` back as if it were the list that was asked
+ * for, so the error state never renders and the page crashes downstream instead.
+ */
 export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, {
     ...init,
-    headers: {
-      "Content-Type": "application/json",
-      ...init?.headers,
-    },
+    headers: { "Content-Type": "application/json", ...init?.headers },
   });
   if (!res.ok) {
     let message = String(res.status);
@@ -25,36 +44,47 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
   return res.json();
 }
 
+/** `?a=1&b=2` from the entries that have a value, or "" when none do. */
+function qs(params: Record<string, string | number | undefined | null>): string {
+  const search = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined && value !== null && value !== "") search.set(key, String(value));
+  }
+  const out = search.toString();
+  return out ? `?${out}` : "";
+}
+
+const send = <T>(method: string) => (path: string, body?: unknown) =>
+  apiFetch<T>(path, { method, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
+
+const post = <T>(path: string, body?: unknown) => send<T>("POST")(path, body);
+const put = <T>(path: string, body?: unknown) => send<T>("PUT")(path, body);
+const patch = <T>(path: string, body?: unknown) => send<T>("PATCH")(path, body);
+const del = <T = void>(path: string, body?: unknown) => send<T>("DELETE")(path, body);
+
+const id = encodeURIComponent;
+
 export const api = {
   notes: {
-    list: (topic?: string, userId?: string) => {
-      const params = new URLSearchParams();
-      if (topic) params.set("topic", topic);
-      if (userId) params.set("user_id", userId);
-      const qs = params.toString();
-      return apiFetch<Note[]>(`/api/notes${qs ? `?${qs}` : ""}`);
-    },
-    get: (id: string) =>
-      apiFetch<Note>(`/api/notes/${encodeURIComponent(id)}`),
+    list: (topic?: string, userId?: string) =>
+      apiFetch<Note[]>(`/api/notes${qs({ topic, user_id: userId })}`),
+    get: (noteId: string) => apiFetch<Note>(`/api/notes/${id(noteId)}`),
     create: (body: { content?: string; topic: string; title?: string; user_id?: string }) =>
-      apiFetch<Note>("/api/notes", { method: "POST", body: JSON.stringify(body) }),
-    update: (id: string, body: Partial<{ title: string; content: string; topic: string; user_id: string; authorized_ids: string[] }>) =>
-      apiFetch<Note>(`/api/notes/${encodeURIComponent(id)}`, { method: "PUT", body: JSON.stringify(body) }),
-    delete: (id: string) =>
-      apiFetch<void>(`/api/notes/${encodeURIComponent(id)}`, { method: "DELETE" }),
-  },
-  tasks: {
-    list: (userId?: string, tag?: string) => {
-      const params = new URLSearchParams();
-      if (userId) params.set("user_id", userId);
-      if (tag) params.set("tag", tag);
-      const qs = params.toString();
-      return apiFetch<Task[]>(`/api/tasks${qs ? `?${qs}` : ""}`);
-    },
-    create: (body: { title: string; status?: TaskStatus; priority?: Priority; tags?: string[]; due_date?: string; user_id?: string }) =>
-      apiFetch<Task>("/api/tasks", { method: "POST", body: JSON.stringify(body) }),
+      post<Note>("/api/notes", body),
     update: (
-      id: string,
+      noteId: string,
+      body: Partial<{ title: string; content: string; topic: string; user_id: string; authorized_ids: string[] }>,
+    ) => put<Note>(`/api/notes/${id(noteId)}`, body),
+    delete: (noteId: string) => del(`/api/notes/${id(noteId)}`),
+  },
+
+  tasks: {
+    list: (userId?: string, tag?: string) =>
+      apiFetch<Task[]>(`/api/tasks${qs({ user_id: userId, tag })}`),
+    create: (body: { title: string; status?: TaskStatus; priority?: Priority; tags?: string[]; due_date?: string; user_id?: string }) =>
+      post<Task>("/api/tasks", body),
+    update: (
+      taskId: string,
       body: Partial<{
         title: string;
         done: boolean;
@@ -65,83 +95,117 @@ export const api = {
         clear_due_date: boolean;
         user_id: string;
         authorized_ids: string[];
-      }>
-    ) => apiFetch<Task>(`/api/tasks/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
-    delete: (id: string) =>
-      apiFetch<void>(`/api/tasks/${id}`, { method: "DELETE" }),
+      }>,
+    ) => patch<Task>(`/api/tasks/${id(taskId)}`, body),
+    delete: (taskId: string) => del(`/api/tasks/${id(taskId)}`),
     listTags: () => apiFetch<string[]>("/api/tasks/tags"),
   },
+
   topics: {
     list: () => apiFetch<Topic[]>("/api/topics"),
-    create: (body: { name: string; color?: string }) =>
-      apiFetch<Topic>("/api/topics", { method: "POST", body: JSON.stringify(body) }),
-    update: (id: string, body: Partial<{ name: string; color: string; user_id: string; authorized_ids: string[] }>) =>
-      apiFetch<Topic>(`/api/topics/${id}`, { method: "PUT", body: JSON.stringify(body) }),
-    delete: (id: string, migrateToId?: string) =>
-      apiFetch<void>(
-        `/api/topics/${id}${migrateToId ? `?migrate_to=${encodeURIComponent(migrateToId)}` : ""}`,
-        { method: "DELETE" }
-      ),
+    create: (body: { name: string; color?: string }) => post<Topic>("/api/topics", body),
+    update: (
+      topicId: string,
+      body: Partial<{ name: string; color: string; user_id: string; authorized_ids: string[] }>,
+    ) => put<Topic>(`/api/topics/${id(topicId)}`, body),
+    delete: (topicId: string, migrateToId?: string) =>
+      del(`/api/topics/${id(topicId)}${qs({ migrate_to: migrateToId })}`),
   },
+
+  memories: {
+    list: (query?: string, userId?: string) =>
+      apiFetch<Memory[]>(`/api/memories${qs({ q: query, user_id: userId })}`),
+    graph: (userId: string, topics?: string) =>
+      apiFetch<MemoryGraph>(`/api/memories/graph${qs({ user_id: userId, topics })}`),
+    create: (body: MemoryWrite) => post<{ id: string }>("/api/memories", body),
+    update: (memoryId: string, body: MemoryWrite) =>
+      put<{ id: string }>(`/api/memories/${id(memoryId)}`, body),
+    delete: (memoryId: string) => del(`/api/memories/${id(memoryId)}`),
+  },
+
+  automations: {
+    list: (userId?: string, kind?: AutomationKind) =>
+      apiFetch<Automation[]>(`/api/automations${qs({ user_id: userId, kind })}`),
+    create: (body: object) => post<{ id: string }>("/api/automations", body),
+    update: (automationId: string, body: object) =>
+      put<{ id: string }>(`/api/automations/${id(automationId)}`, body),
+    delete: (automationId: string) => del(`/api/automations/${id(automationId)}`),
+  },
+
   // The assistant has no calendar of its own — it drives the user's real Google/Apple
   // calendar. The FE only reports connection status and starts the Google OAuth flow.
   calendars: {
-    connectionStatus: (userId?: string) => {
-      const qs = userId ? `?user_id=${encodeURIComponent(userId)}` : "";
-      return apiFetch<CalendarConnectionStatus>(`/api/calendars/connection-status${qs}`);
-    },
-    googleAuthUrl: (userId?: string) =>
-      `/api/calendars/google-auth${userId ? `?user_id=${encodeURIComponent(userId)}` : ""}`,
+    connectionStatus: (userId?: string) =>
+      apiFetch<CalendarConnectionStatus>(`/api/calendars/connection-status${qs({ user_id: userId })}`),
     startGoogleAuth: (userId?: string) =>
-      apiFetch<{ auth_url: string }>(
-        `/api/calendars/google-auth${userId ? `?user_id=${encodeURIComponent(userId)}` : ""}`,
-      ),
+      apiFetch<{ auth_url: string }>(`/api/calendars/google-auth${qs({ user_id: userId })}`),
     appleSetup: (body: { user_id: string; username: string; password: string }) =>
-      apiFetch<{ status: string; username: string }>(`/api/calendars/apple/setup`, {
-        method: "POST",
-        body: JSON.stringify(body),
-      }),
+      post<{ status: string; username: string }>("/api/calendars/apple/setup", body),
     disconnectGoogle: (userId: string) =>
-      apiFetch<{ status: string }>(`/api/calendars/google/disconnect?user_id=${encodeURIComponent(userId)}`, {
-        method: "DELETE",
-      }),
+      del<{ status: string }>(`/api/calendars/google/disconnect${qs({ user_id: userId })}`),
     disconnectApple: (userId: string) =>
-      apiFetch<{ status: string }>(`/api/calendars/apple/disconnect?user_id=${encodeURIComponent(userId)}`, {
-        method: "DELETE",
-      }),
+      del<{ status: string }>(`/api/calendars/apple/disconnect${qs({ user_id: userId })}`),
   },
-  automations: {
-    list: (userId?: string, kind?: AutomationKind) => {
-      const params = new URLSearchParams();
-      if (userId) params.set("user_id", userId);
-      if (kind) params.set("kind", kind);
-      const qs = params.toString();
-      return apiFetch<Automation[]>(`/api/automations${qs ? `?${qs}` : ""}`);
-    },
+
+  contacts: {
+    list: () => apiFetch<{ contacts: Contact[] }>("/api/admin/contacts").then((r) => r.contacts ?? []),
+    add: (name: string, canonicalId?: string) =>
+      post("/api/admin/contacts", { name, canonical_id: canonicalId || undefined }),
+    remove: (canonicalId: string) => del(`/api/admin/contacts/${id(canonicalId)}`),
+    reload: () => post<{ loaded: number }>("/api/admin/contacts/reload"),
+    saveData: (canonicalId: string, data: Record<string, unknown>) =>
+      put(`/api/admin/contacts/${id(canonicalId)}/data`, data),
+    addIdentity: (canonicalId: string, body: { platform: string; id: string; label: string }) =>
+      post(`/api/admin/contacts/${id(canonicalId)}/identities`, body),
+    // Declared on the backend ahead of /contacts/{canonical_id} so this reaches
+    // the identity handler rather than "delete the contact called identities".
+    removeIdentity: (body: { platform: string; id: string }) =>
+      del("/api/admin/contacts/identities", body),
+    setPrimaryChannel: (canonicalId: string, platform: string, channelId: string) =>
+      post(`/api/admin/contacts/${id(canonicalId)}/channel`, { platform, channel_id: channelId }),
   },
-  backgroundStatus: {
-    get: () => apiFetch<BackgroundStatusResponse>("/api/admin/background-status"),
+
+  config: {
+    get: <T,>() => apiFetch<{ effective: T }>("/api/admin/config"),
+    defaults: <T,>() => apiFetch<T>("/api/admin/config/defaults"),
+    save: (key: string, value: unknown) => put("/api/admin/config", { [key]: value }),
+    reset: (key: string) => del(`/api/admin/config/${id(key)}`),
   },
-  routerMetrics: {
-    get: () => apiFetch<RouterMetricsResponse>("/api/admin/router-metrics"),
+
+  memoryAdmin: {
+    consolidate: () => post("/api/admin/memory/consolidate"),
   },
+
+  userData: {
+    get: <T,>(userId: string) => apiFetch<T>(`/api/admin/user-data/${id(userId)}`),
+  },
+
+  backgroundStatus: { get: () => apiFetch<BackgroundStatusResponse>("/api/admin/background-status") },
+  routerMetrics: { get: () => apiFetch<RouterMetricsResponse>("/api/admin/router-metrics") },
+
   apiErrors: {
-    get: (limit = 25, source?: string) => {
-      const params = new URLSearchParams({ limit: String(limit) });
-      if (source) params.set("source", source);
-      return apiFetch<ApiErrorsResponse>(`/api/admin/api-errors?${params}`);
-    },
-    clear: () => apiFetch<{ ok: boolean }>("/api/admin/api-errors", { method: "DELETE" }),
+    get: (limit = 25, source?: string) =>
+      apiFetch<ApiErrorsResponse>(`/api/admin/api-errors${qs({ limit, source })}`),
+    clear: () => del<{ ok: boolean }>("/api/admin/api-errors"),
   },
+
   chat: {
     send: (message: string, userId?: string) =>
-      apiFetch<{ reply: string }>("/api/chat", {
-        method: "POST",
-        body: JSON.stringify({ message, user_id: userId || "web-user" }),
-      }),
-    history: (userId?: string) => {
-      const qs = userId ? `?user_id=${encodeURIComponent(userId)}` : "";
-      return apiFetch<{ messages: ChatTurn[] }>(`/api/chat/history${qs}`);
-    },
+      post<{ reply: string }>("/api/chat", { message, user_id: userId || "web-user" }),
+    history: (userId?: string) =>
+      apiFetch<{ messages: ChatTurn[] }>(`/api/chat/history${qs({ user_id: userId })}`),
   },
+
+  /** Fire the heartbeat, or push an external event, for one person. */
+  trigger: (userId: string, event: string) =>
+    post<{ ok?: boolean }>(`/api/trigger${qs({ user_id: userId })}`, { event }),
 };
+
+/** The write shape shared by creating and editing a memory. */
+export interface MemoryWrite {
+  content: string;
+  category?: string;
+  topics: string[];
+  user_id?: string;
+  authorized_ids: string[];
+}

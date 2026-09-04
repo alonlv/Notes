@@ -49,19 +49,10 @@ export default function ChatPage() {
     setLoading(true);
 
     try {
-      const res = await fetch("/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: text, user_id: selectedUserId || "web-user" }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setError(data?.error ?? `Error ${res.status}`);
-      } else {
-        setMessages((prev) => [...prev, { role: "assistant", text: data.reply }]);
-      }
-    } catch {
-      setError("Could not reach the assistant.");
+      const { reply } = await api.chat.send(text, selectedUserId || undefined);
+      setMessages((prev) => [...prev, { role: "assistant", text: reply }]);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not reach the assistant.");
     } finally {
       setLoading(false);
     }

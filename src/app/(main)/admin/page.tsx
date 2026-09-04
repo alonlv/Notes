@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { RotateCcw, Save, Plus, Trash2, ChevronDown, ChevronUp, GripVertical, Settings, Cpu, Users, Brain, FileText, Database, Activity, Zap, AlertTriangle, type LucideIcon } from "lucide-react";
-import { apiFetch } from "@/lib/api";
+import { api } from "@/lib/api";
 import { ApiErrorsPanel } from "@/components/system/ApiErrors";
 import type { BackgroundStatusResponse, Contact, JobRun, JobStatus, RouterMetricsResponse } from "@/types/api";
 
@@ -42,6 +42,10 @@ interface Toast {
   message: string;
   type: "success" | "error" | "info";
 }
+
+/** Panels take the page's `toast` rather than calling `useToasts` themselves:
+ *  a second instance has its own list, and only the page renders one. */
+type ToastFn = (message: string, type?: Toast["type"]) => void;
 
 type Tab = "general" | "prompt" | "providers" | "contacts" | "data" | "heartbeat" | "memory" | "background" | "errors";
 
@@ -132,8 +136,8 @@ export default function AdminPage() {
     setFetchError(null);
     try {
       const [cfgRes, defsRes] = await Promise.all([
-        apiFetch<{ effective: Config }>("/api/admin/config"),
-        apiFetch<Partial<Config>>("/api/admin/config/defaults"),
+        api.config.get<Config>(),
+        api.config.defaults<Partial<Config>>(),
       ]);
       setConfig(cfgRes.effective);
       setProviders(
@@ -173,7 +177,7 @@ export default function AdminPage() {
 
   async function saveField(key: keyof Config, value: unknown) {
     try {
-      await apiFetch("/api/admin/config", { method: "PUT", body: JSON.stringify({ [key]: value }) });
+      await api.config.save(key, value);
       setConfig((prev) => prev ? { ...prev, [key]: value } : prev);
       toast(`Saved`, "success");
     } catch (e) { toast((e as Error).message, "error"); }
@@ -181,7 +185,7 @@ export default function AdminPage() {
 
   async function resetField(key: keyof Config) {
     try {
-      await apiFetch(`/api/admin/config/${key}`, { method: "DELETE" });
+      await api.config.reset(key);
       toast(`Reset to default`, "info");
       await loadConfig();
     } catch (e) { toast((e as Error).message, "error"); }
@@ -224,86 +228,56 @@ export default function AdminPage() {
   
   async function loadContacts() {
     try {
-      const res = await apiFetch<{ contacts: Contact[] }>("/api/admin/contacts");
-      setContacts(res.contacts || []);
+      setContacts(await api.contacts.list());
     } catch (e) {
       toast(`Contacts load failed: ${(e as Error).message}`, "error");
     }
   }
 
-  async function addContact(name: string, canonicalId?: string) {
-    if (!name.trim()) { toast("Enter a name first", "error"); return; }
+  /** Every contact mutation is the same three beats: call, say so, reload. */
+  async function contactAction(done: string, call: () => Promise<unknown>) {
     try {
-      await apiFetch("/api/admin/contacts", {
-        method: "POST",
-        body: JSON.stringify({ name: name.trim(), canonical_id: canonicalId?.trim() || undefined }),
-      });
-      toast(`Contact "${name}" added`, "success");
+      await call();
+      toast(done, "success");
       await loadContacts();
     } catch (e) { toast((e as Error).message, "error"); }
+  }
+
+  async function addContact(name: string, canonicalId?: string) {
+    if (!name.trim()) { toast("Enter a name first", "error"); return; }
+    await contactAction(`Contact "${name}" added`, () =>
+      api.contacts.add(name.trim(), canonicalId?.trim()));
   }
 
   async function removeContact(canonicalId: string) {
     if (!confirm(`Delete contact "${canonicalId}" and all its identities?`)) return;
-    try {
-      await apiFetch(`/api/admin/contacts/${encodeURIComponent(canonicalId)}`, { method: "DELETE" });
-      toast("Contact removed", "info");
-      await loadContacts();
-    } catch (e) { toast((e as Error).message, "error"); }
+    await contactAction("Contact removed", () => api.contacts.remove(canonicalId));
   }
 
   async function addIdentity(canonicalId: string, platform: string, id: string, label: string) {
     if (!id.trim()) { toast("Platform ID is required", "error"); return; }
-    try {
-      await apiFetch(`/api/admin/contacts/${encodeURIComponent(canonicalId)}/identities`, {
-        method: "POST",
-        body: JSON.stringify({ platform: platform.trim(), id: id.trim(), label: label.trim() }),
-      });
-      toast(`Identity added`, "success");
-      await loadContacts();
-    } catch (e) { toast((e as Error).message, "error"); }
+    await contactAction("Identity added", () =>
+      api.contacts.addIdentity(canonicalId, {
+        platform: platform.trim(), id: id.trim(), label: label.trim(),
+      }));
   }
 
   async function removeIdentity(platform: string, id: string) {
     if (!confirm(`Remove identity (${platform}, ${id})?`)) return;
-    try {
-      await apiFetch("/api/admin/contacts/identities", {
-        method: "DELETE",
-        body: JSON.stringify({ platform, id }),
-      });
-      toast("Identity removed", "info");
-      await loadContacts();
-    } catch (e) { toast((e as Error).message, "error"); }
+    await contactAction("Identity removed", () => api.contacts.removeIdentity({ platform, id }));
   }
 
   async function setPrimaryChannel(canonicalId: string, platform: string, channelId: string) {
-    try {
-      await apiFetch(`/api/admin/contacts/${encodeURIComponent(canonicalId)}/channel`, {
-        method: "POST",
-        body: JSON.stringify({ platform, channel_id: channelId }),
-      });
-      toast("Primary channel set", "success");
-      await loadContacts();
-    } catch (e) { toast((e as Error).message, "error"); }
+    await contactAction("Primary channel set", () =>
+      api.contacts.setPrimaryChannel(canonicalId, platform, channelId));
   }
 
   async function reloadContacts() {
-    try {
-      const r = await apiFetch<{ loaded: number }>("/api/admin/contacts/reload", { method: "POST" });
-      toast(`Reloaded ${r.loaded} contact(s) from disk`, "success");
-      await loadContacts();
-    } catch (e) { toast((e as Error).message, "error"); }
+    await contactAction("Reloaded contacts from disk", api.contacts.reload);
   }
 
   async function saveContactData(canonicalId: string, data: Record<string, unknown>) {
-    try {
-      await apiFetch(`/api/admin/contacts/${encodeURIComponent(canonicalId)}/data`, {
-        method: "PUT",
-        body: JSON.stringify(data),
-      });
-      toast("Saved", "success");
-      await loadContacts();
-    } catch (e) { toast((e as Error).message, "error"); }
+    await contactAction("Saved", () => api.contacts.saveData(canonicalId, data));
   }
 
   // ── Render ────────────────────────────────────────────────────────────────
@@ -535,7 +509,7 @@ export default function AdminPage() {
               onSave={() => saveField(key, config[key])}
               onReset={async () => {
                 try {
-                  await apiFetch(`/api/admin/config/${key}`, { method: "DELETE" });
+                  await api.config.reset(key);
                   setConfig((prev) =>
                     prev ? { ...prev, [key]: (defaults[key] as string) ?? "" } : prev
                   );
@@ -661,7 +635,7 @@ export default function AdminPage() {
             Manage user data associations. View and edit user IDs and authorized users for all data types.
             Use this to reassign data ownership or modify access permissions.
           </p>
-          <DataManager />
+          <DataManager contacts={contacts} toast={toast} />
         </div>
       )}
 
@@ -1365,18 +1339,10 @@ function ContactCard({
   );
 }
 
-function DataManager() {
+function DataManager({ contacts: allContacts, toast }: { contacts: Contact[]; toast: ToastFn }) {
   const [userId, setUserId] = useState("");
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
-  const [allContacts, setAllContacts] = useState<Contact[]>([]);
-  const { toast } = useToasts();
-
-  useEffect(() => {
-    apiFetch<{ contacts: Contact[] }>("/api/admin/contacts")
-      .then((r) => setAllContacts(r.contacts || []))
-      .catch(() => {});
-  }, []);
 
   async function loadUserData() {
     if (!userId.trim()) {
@@ -1385,8 +1351,7 @@ function DataManager() {
     }
     setLoading(true);
     try {
-      const res = await apiFetch(`/api/admin/user-data/${encodeURIComponent(userId.trim())}`);
-      setData(res);
+      setData(await api.userData.get(userId.trim()));
     } catch (e) {
       toast((e as Error).message, "error");
       setData(null);
@@ -1395,14 +1360,17 @@ function DataManager() {
     }
   }
 
-  async function updateData(type: string, id: string, updates: any) {
-    try {
-      const endpoint = type === 'notes' ? `/api/notes/${id}` :
-                      type === 'tasks' ? `/api/tasks/${id}` :
-                      type === 'topics' ? `/api/topics/${id}` : null;
-      if (!endpoint) return;
+  async function updateData(type: string, id: string, updates: Record<string, unknown>) {
+    // Tasks take PATCH, not PUT — a PUT here came back 405 and reassigning a
+    // task's owner from this panel silently did nothing.
+    const write =
+      type === "notes" ? () => api.notes.update(id, updates) :
+      type === "tasks" ? () => api.tasks.update(id, updates) :
+      type === "topics" ? () => api.topics.update(id, updates) : null;
+    if (!write) return;
 
-      await apiFetch(endpoint, { method: "PUT", body: JSON.stringify(updates) });
+    try {
+      await write();
       toast("Updated successfully", "success");
       loadUserData(); // Refresh data
     } catch (e) {
@@ -1612,60 +1580,46 @@ function DataItem({ type, item, contacts, onUpdate }: { type: string; item: any;
 
 // ─── Heartbeat panel ──────────────────────────────────────────────────────────
 
+const HEARTBEAT_EVENT =
+  "Manual heartbeat test from Admin panel. Check if there is anything worth " +
+  "reporting for this user right now.";
+
 function HeartbeatPanel({
   contacts,
   toast,
 }: {
   contacts: Contact[];
-  toast: (msg: string, type: "success" | "error" | "info") => void;
+  toast: ToastFn;
 }) {
   const [selectedUser, setSelectedUser] = useState("");
   const [eventText, setEventText] = useState("");
   const [firing, setFiring] = useState(false);
   const [triggering, setTriggering] = useState(false);
 
-  async function fireHeartbeat() {
-    if (!selectedUser) return;
-    setFiring(true);
+  /** Both buttons do the same thing — push an event at one person. */
+  async function fire(event: string, setBusy: (v: boolean) => void, done: string): Promise<boolean> {
+    if (!selectedUser) return false;
+    setBusy(true);
     try {
-      const res = await fetch(`/api/trigger?user_id=${encodeURIComponent(selectedUser)}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ event: "Manual heartbeat test from Admin panel. Check if there is anything worth reporting for this user right now." }),
-      });
-      if (res.ok) {
-        toast("Heartbeat queued — check the user's messaging channel", "success");
-      } else {
-        const data = await res.json().catch(() => ({}));
-        toast(data?.error ?? "Heartbeat failed", "error");
-      }
-    } catch {
-      toast("Network error", "error");
+      await api.trigger(selectedUser, event);
+      toast(done, "success");
+      return true;
+    } catch (e) {
+      toast((e as Error).message, "error");
+      return false;
     } finally {
-      setFiring(false);
+      setBusy(false);
     }
   }
 
+  const fireHeartbeat = () =>
+    fire(HEARTBEAT_EVENT, setFiring, "Heartbeat queued — check the user's messaging channel");
+
   async function pushTrigger() {
-    if (!selectedUser || !eventText.trim()) return;
-    setTriggering(true);
-    try {
-      const res = await fetch(`/api/trigger?user_id=${encodeURIComponent(selectedUser)}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ event: eventText.trim() }),
-      });
-      if (res.ok) {
-        toast("Event pushed — agent is reasoning about it", "success");
-        setEventText("");
-      } else {
-        const data = await res.json().catch(() => ({}));
-        toast(data?.error ?? "Trigger failed", "error");
-      }
-    } catch {
-      toast("Network error", "error");
-    } finally {
-      setTriggering(false);
+    const event = eventText.trim();
+    if (!event) return;
+    if (await fire(event, setTriggering, "Event pushed — agent is reasoning about it")) {
+      setEventText("");
     }
   }
 
@@ -1745,14 +1699,14 @@ function HeartbeatPanel({
 function MemoryPanel({
   toast,
 }: {
-  toast: (msg: string, type: "success" | "error" | "info") => void;
+  toast: ToastFn;
 }) {
   const [running, setRunning] = useState(false);
 
   async function runConsolidation() {
     setRunning(true);
     try {
-      await apiFetch("/api/admin/memory/consolidate", { method: "POST" });
+      await api.memoryAdmin.consolidate();
       toast("Memory consolidation started in background", "success");
     } catch (e) {
       toast((e as Error).message, "error");
@@ -1976,8 +1930,8 @@ function BackgroundStatusPanel() {
     setError(null);
     try {
       const [res, m] = await Promise.all([
-        apiFetch<BackgroundStatusResponse>("/api/admin/background-status"),
-        apiFetch<RouterMetricsResponse>("/api/admin/router-metrics").catch(() => null),
+        api.backgroundStatus.get(),
+        api.routerMetrics.get().catch(() => null),
       ]);
       setData(res);
       setMetrics(m);

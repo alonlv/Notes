@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Md } from "@/components/ui/md";
 import { MemoryGraph, clusterColor } from "@/components/memories/MemoryGraph";
+import { api, type MemoryWrite } from "@/lib/api";
 import type { Memory, MemoryGraph as MemoryGraphData } from "@/types/api";
 import { useContacts } from "@/hooks/use-contacts";
 import { useSelectedUser } from "@/context/user-context";
@@ -27,6 +28,11 @@ function parseTopics(raw: string): string[] {
     }
   }
   return out;
+}
+
+/** Who may see a memory: whoever was ticked, plus always the person being viewed. */
+function authorizedIds(selectedUserId: string | null, ticked: string[]): string[] {
+  return [...new Set([selectedUserId, ...ticked].filter((v): v is string => Boolean(v)))];
 }
 
 /** Read the topics array off a memory's metadata, tolerating missing/malformed values. */
@@ -135,13 +141,7 @@ export default function MemoriesPage() {
 
   const { data: memories = [], isLoading, error } = useQuery<Memory[]>({
     queryKey: ["memories", submitted, selectedUserId],
-    queryFn: () => {
-      const params = new URLSearchParams();
-      if (submitted) params.set("q", submitted);
-      if (selectedUserId) params.set("user_id", selectedUserId);
-      const qs = params.toString();
-      return fetch(`/api/memories${qs ? `?${qs}` : ""}`).then((r) => r.json());
-    },
+    queryFn: () => api.memories.list(submitted, selectedUserId ?? undefined),
   });
 
   // The graph is served whole rather than searched, so it only depends on who is
@@ -150,11 +150,7 @@ export default function MemoriesPage() {
   const { data: graph, isLoading: graphLoading, error: graphError } = useQuery<MemoryGraphData>({
     queryKey: ["memory-graph", selectedUserId, topicFilter],
     enabled: !!selectedUserId,
-    queryFn: () => {
-      const params = new URLSearchParams({ user_id: selectedUserId! });
-      if (topicFilter) params.set("topics", topicFilter);
-      return fetch(`/api/memories/graph?${params.toString()}`).then((r) => r.json());
-    },
+    queryFn: () => api.memories.graph(selectedUserId!, topicFilter ?? undefined),
   });
 
   // Jumping from a node to its entry in the list is only useful if you land on it.
@@ -171,21 +167,21 @@ export default function MemoriesPage() {
   }
 
   const create = useMutation({
-    mutationFn: (body: object) =>
-      fetch("/api/memories", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).then((r) => r.json()),
+    mutationFn: api.memories.create,
     onSuccess: () => { invalidateMemories(); setShowAdd(false); },
   });
 
   const update = useMutation({
-    mutationFn: ({ id, body }: { id: string; body: object }) =>
-      fetch(`/api/memories/${id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).then((r) => r.json()),
+    mutationFn: ({ id, body }: { id: string; body: MemoryWrite }) => api.memories.update(id, body),
     onSuccess: () => { invalidateMemories(); setEditId(null); },
   });
 
   const del = useMutation({
-    mutationFn: (id: string) => fetch(`/api/memories/${id}`, { method: "DELETE" }),
+    mutationFn: api.memories.delete,
     onSuccess: () => invalidateMemories(),
   });
+
+  const writeError = create.error ?? update.error ?? del.error;
 
   function handleSearch(e: React.FormEvent) {
     e.preventDefault();
@@ -243,7 +239,7 @@ export default function MemoriesPage() {
         key={m.id}
         initial={{ content: m.content, category: category ?? "", topics: memoryTopics(m).join(", "), authorized_ids: m.authorized_ids?.length ? m.authorized_ids : (m.owner_id || m.user_id) ? [m.owner_id || m.user_id || ""] : [] }}
         onSave={(s) => {
-          const ids = [...new Set([selectedUserId, ...s.authorized_ids].filter(Boolean))];
+          const ids = authorizedIds(selectedUserId, s.authorized_ids);
           update.mutate({ id: m.id, body: { content: s.content, category: s.category || undefined, topics: parseTopics(s.topics), user_id: selectedUserId || undefined, authorized_ids: ids } });
         }}
         onCancel={() => setEditId(null)}
@@ -335,10 +331,10 @@ export default function MemoriesPage() {
         </div>
       </div>
 
-      {error && (
+      {(error || writeError) && (
         <div className="mb-4 flex items-center gap-2 rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">
           <AlertCircle className="h-4 w-4 shrink-0" />
-          Could not load memories.
+          {error ? "Could not load memories" : "Could not save"} — {(error ?? writeError)!.message}
         </div>
       )}
 
@@ -354,7 +350,7 @@ export default function MemoriesPage() {
           <MemoryForm
             initial={{ content: "", category: "", topics: "", authorized_ids: [selectedUserId] }}
             onSave={(s) => {
-              const ids = [...new Set([selectedUserId, ...s.authorized_ids].filter(Boolean))];
+              const ids = authorizedIds(selectedUserId, s.authorized_ids);
               create.mutate({ content: s.content, category: s.category || undefined, topics: parseTopics(s.topics), user_id: selectedUserId, authorized_ids: ids });
             }}
             onCancel={() => setShowAdd(false)}

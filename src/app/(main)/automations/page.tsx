@@ -14,6 +14,7 @@ import {
   type ScheduledFormState,
 } from "@/components/ui/ScheduledItemForm";
 import type { Automation, AutomationKind } from "@/types/api";
+import { api } from "@/lib/api";
 import { useContacts } from "@/hooks/use-contacts";
 import { useSelectedUser } from "@/context/user-context";
 import { cn } from "@/lib/utils";
@@ -35,31 +36,27 @@ export default function AutomationsPage() {
 
   const { data: automations = [], isLoading, error } = useQuery<Automation[]>({
     queryKey: ["automations", selectedUserId],
-    queryFn: () => {
-      const params = new URLSearchParams();
-      if (selectedUserId) params.set("user_id", selectedUserId);
-      return fetch(`/api/automations?${params}`).then((r) => r.json());
-    },
+    queryFn: () => api.automations.list(selectedUserId ?? undefined),
   });
 
   const items = automations.filter((a) => a.kind === activeKind);
 
   const create = useMutation({
-    mutationFn: (body: object) =>
-      fetch("/api/automations", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).then((r) => r.json()),
+    mutationFn: api.automations.create,
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["automations"] }); setShowAdd(false); },
   });
 
   const update = useMutation({
-    mutationFn: ({ id, body }: { id: string; body: object }) =>
-      fetch(`/api/automations/${id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).then((r) => r.json()),
+    mutationFn: ({ id, body }: { id: string; body: object }) => api.automations.update(id, body),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["automations"] }); setEditId(null); },
   });
 
   const del = useMutation({
-    mutationFn: (id: string) => fetch(`/api/automations/${id}`, { method: "DELETE" }),
+    mutationFn: api.automations.delete,
     onSuccess: () => qc.invalidateQueries({ queryKey: ["automations"] }),
   });
+
+  const writeError = create.error ?? update.error ?? del.error;
 
   function toForm(a: Automation): ScheduledFormState {
     return scheduledItemToForm(a, a.content);
@@ -122,10 +119,10 @@ export default function AutomationsPage() {
       </div>
 
       {/* Errors / auth hint */}
-      {error && (
+      {(error || writeError) && (
         <div className="mb-4 flex items-center gap-2 rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">
           <AlertCircle className="h-4 w-4 shrink-0" />
-          Could not load automations.
+          {error ? "Could not load automations" : "Could not save"} — {(error ?? writeError)!.message}
         </div>
       )}
 
