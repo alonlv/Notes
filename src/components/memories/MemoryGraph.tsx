@@ -42,7 +42,9 @@ const CLUSTER_COLORS = [
 ];
 const UNCLUSTERED_COLOR = "#94a3b8";
 
-function clusterColor(cluster: number): string {
+/** Exported so the list view colours a context the same way the map does — one
+ *  store, two pictures, and the same subject is the same colour in both. */
+export function clusterColor(cluster: number): string {
   return cluster < 0 ? UNCLUSTERED_COLOR : CLUSTER_COLORS[cluster % CLUSTER_COLORS.length];
 }
 

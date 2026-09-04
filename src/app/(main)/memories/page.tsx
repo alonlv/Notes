@@ -1,13 +1,13 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Trash2, Brain, Search, RefreshCw, AlertCircle, Plus, Pencil, X, Check, List, Network } from "lucide-react";
+import { Trash2, Brain, Search, RefreshCw, AlertCircle, Plus, Pencil, X, Check, List, Network, Layers } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Md } from "@/components/ui/md";
-import { MemoryGraph } from "@/components/memories/MemoryGraph";
+import { MemoryGraph, clusterColor } from "@/components/memories/MemoryGraph";
 import type { Memory, MemoryGraph as MemoryGraphData } from "@/types/api";
 import { useContacts } from "@/hooks/use-contacts";
 import { useSelectedUser } from "@/context/user-context";
@@ -124,6 +124,9 @@ export default function MemoriesPage() {
   const [editId, setEditId] = useState<string | null>(null);
   const [topicFilter, setTopicFilter] = useState<string | null>(null);
   const [view, setView] = useState<"list" | "graph">("list");
+  // The list can be read either way: as the flat file of everything stored, or
+  // organised into the contexts the graph found. Same rows, same store.
+  const [groupByContext, setGroupByContext] = useState(true);
   const [highlightId, setHighlightId] = useState<string | null>(null);
   const highlightRef = useRef<HTMLDivElement | null>(null);
   const qc = useQueryClient();
@@ -142,10 +145,11 @@ export default function MemoriesPage() {
   });
 
   // The graph is served whole rather than searched, so it only depends on who is
-  // selected and which topic (if any) the view is scoped to.
+  // selected and which topic (if any) the view is scoped to. Both views read it:
+  // the map draws it, and the list groups by the contexts it found.
   const { data: graph, isLoading: graphLoading, error: graphError } = useQuery<MemoryGraphData>({
     queryKey: ["memory-graph", selectedUserId, topicFilter],
-    enabled: view === "graph" && !!selectedUserId,
+    enabled: !!selectedUserId,
     queryFn: () => {
       const params = new URLSearchParams({ user_id: selectedUserId! });
       if (topicFilter) params.set("topics", topicFilter);
@@ -195,6 +199,100 @@ export default function MemoriesPage() {
   const visibleMemories = topicFilter
     ? memories.filter((m) => memoryTopics(m).includes(topicFilter))
     : memories;
+
+  // Which context each memory sits in, taken straight from the graph — so the list
+  // and the map can never disagree about what belongs with what.
+  const contextOf = useMemo(() => {
+    const map = new Map<string, { cluster: number; label: string }>();
+    for (const node of graph?.nodes ?? []) {
+      map.set(node.id, { cluster: node.cluster, label: node.cluster_label });
+    }
+    return map;
+  }, [graph]);
+
+  // The same rows, gathered under the subject they belong to. Named contexts come
+  // first, largest first; everything the graph has not connected to a subject yet
+  // falls into one trailing group rather than being hidden.
+  const grouped = useMemo(() => {
+    const buckets = new Map<number, { cluster: number; label: string; items: Memory[] }>();
+    for (const m of visibleMemories) {
+      const ctx = contextOf.get(m.id);
+      const cluster = ctx?.cluster ?? -1;
+      const bucket = buckets.get(cluster) ?? { cluster, label: ctx?.label ?? "", items: [] };
+      bucket.items.push(m);
+      buckets.set(cluster, bucket);
+    }
+    return [...buckets.values()].sort(
+      (a, b) =>
+        Number(a.cluster < 0) - Number(b.cluster < 0) ||
+        b.items.length - a.items.length ||
+        a.label.localeCompare(b.label)
+    );
+  }, [visibleMemories, contextOf]);
+
+  // Only worth offering when the graph has actually found more than one subject.
+  const hasContexts = grouped.some((g) => g.cluster >= 0) && grouped.length > 1;
+  const showGrouped = groupByContext && hasContexts;
+
+  // One row, rendered the same way whether the list is grouped or flat.
+  function renderMemory(m: Memory) {
+    const category = m.metadata?.category as string | undefined;
+    const topics = memoryTopics(m);
+    return editId === m.id ? (
+      <MemoryForm
+        key={m.id}
+        initial={{ content: m.content, category: category ?? "", topics: memoryTopics(m).join(", "), authorized_ids: m.authorized_ids?.length ? m.authorized_ids : (m.owner_id || m.user_id) ? [m.owner_id || m.user_id || ""] : [] }}
+        onSave={(s) => {
+          const ids = [...new Set([selectedUserId, ...s.authorized_ids].filter(Boolean))];
+          update.mutate({ id: m.id, body: { content: s.content, category: s.category || undefined, topics: parseTopics(s.topics), user_id: selectedUserId || undefined, authorized_ids: ids } });
+        }}
+        onCancel={() => setEditId(null)}
+        saving={update.isPending}
+        contacts={contacts}
+      />
+    ) : (
+      <div
+        key={m.id}
+        ref={highlightId === m.id ? highlightRef : undefined}
+        className={`flex items-start gap-3 rounded-lg border p-3 transition-colors ${
+          highlightId === m.id ? "border-primary ring-1 ring-primary/40" : "border-border"
+        }`}
+      >
+        <Brain className="h-4 w-4 shrink-0 mt-0.5 text-muted-foreground" />
+        <div className="flex-1 min-w-0">
+          <Md className="text-sm">{m.content}</Md>
+          <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+            {category && (
+              <Badge variant="secondary" className="text-xs capitalize">
+                {category.toLowerCase()}
+              </Badge>
+            )}
+            {topics.map((t) => (
+              <button key={t} onClick={() => setTopicFilter(t)} title={`Filter by ${t}`}>
+                <Badge variant="outline" className="text-xs capitalize cursor-pointer hover:border-primary hover:text-primary">
+                  #{t}
+                </Badge>
+              </button>
+            ))}
+            {(() => {
+              const ids: string[] = (m.metadata as any)?.authorized_ids?.length ? (m.metadata as any).authorized_ids : m.authorized_ids?.length ? m.authorized_ids : (m.owner_id || m.user_id) ? [m.owner_id || m.user_id || ""] : [];
+              if (!ids.length) return null;
+              const names = ids.map((id: string) => contacts.find((c) => c.canonical_id === id)?.name ?? id.replace(/^person:/, ""));
+              return <span className="text-xs text-muted-foreground/50 truncate">{names.join(", ")}</span>;
+            })()}
+          </div>
+        </div>
+        <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground shrink-0"
+          onClick={() => { setEditId(m.id); setShowAdd(false); }}>
+          <Pencil className="h-3.5 w-3.5" />
+        </Button>
+        <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-red-600 shrink-0"
+          onClick={() => del.mutate(m.id)} disabled={del.isPending}>
+          <Trash2 className="h-3.5 w-3.5" />
+        </Button>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-2xl mx-auto p-4 md:p-6">
@@ -309,6 +407,28 @@ export default function MemoriesPage() {
         </div>
       )}
 
+      {view === "list" && hasContexts && (
+        <div className="mb-4 flex items-center justify-between gap-2 text-xs">
+          <button
+            onClick={() => setGroupByContext((on) => !on)}
+            aria-pressed={groupByContext}
+            className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 transition-colors ${
+              groupByContext
+                ? "border-primary bg-primary/10 text-primary"
+                : "border-border text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <Layers className="h-3.5 w-3.5" />
+            Group by context
+          </button>
+          {showGrouped && (
+            <span className="text-muted-foreground">
+              {grouped.filter((g) => g.cluster >= 0).length} contexts found
+            </span>
+          )}
+        </div>
+      )}
+
       {view === "graph" ? (
         !selectedUserId ? null : graphError ? (
           <div className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
@@ -338,67 +458,26 @@ export default function MemoriesPage() {
                 : "No memories stored yet."}
           </p>
         </div>
-      ) : (
-        <div className="space-y-2">
-          {visibleMemories.map((m) => {
-            const category = m.metadata?.category as string | undefined;
-            const topics = memoryTopics(m);
-            return editId === m.id ? (
-              <MemoryForm
-                key={m.id}
-                initial={{ content: m.content, category: category ?? "", topics: memoryTopics(m).join(", "), authorized_ids: m.authorized_ids?.length ? m.authorized_ids : (m.owner_id || m.user_id) ? [m.owner_id || m.user_id || ""] : [] }}
-                onSave={(s) => {
-                  const ids = [...new Set([selectedUserId, ...s.authorized_ids].filter(Boolean))];
-                  update.mutate({ id: m.id, body: { content: s.content, category: s.category || undefined, topics: parseTopics(s.topics), user_id: selectedUserId || undefined, authorized_ids: ids } });
-                }}
-                onCancel={() => setEditId(null)}
-                saving={update.isPending}
-                contacts={contacts}
-              />
-            ) : (
-              <div
-                key={m.id}
-                ref={highlightId === m.id ? highlightRef : undefined}
-                className={`flex items-start gap-3 rounded-lg border p-3 transition-colors ${
-                  highlightId === m.id ? "border-primary ring-1 ring-primary/40" : "border-border"
-                }`}
-              >
-                <Brain className="h-4 w-4 shrink-0 mt-0.5 text-muted-foreground" />
-                <div className="flex-1 min-w-0">
-                  <Md className="text-sm">{m.content}</Md>
-                  <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                    {category && (
-                      <Badge variant="secondary" className="text-xs capitalize">
-                        {category.toLowerCase()}
-                      </Badge>
-                    )}
-                    {topics.map((t) => (
-                      <button key={t} onClick={() => setTopicFilter(t)} title={`Filter by ${t}`}>
-                        <Badge variant="outline" className="text-xs capitalize cursor-pointer hover:border-primary hover:text-primary">
-                          #{t}
-                        </Badge>
-                      </button>
-                    ))}
-                    {(() => {
-                      const ids: string[] = (m.metadata as any)?.authorized_ids?.length ? (m.metadata as any).authorized_ids : m.authorized_ids?.length ? m.authorized_ids : (m.owner_id || m.user_id) ? [m.owner_id || m.user_id || ""] : [];
-                      if (!ids.length) return null;
-                      const names = ids.map((id: string) => contacts.find((c) => c.canonical_id === id)?.name ?? id.replace(/^person:/, ""));
-                      return <span className="text-xs text-muted-foreground/50 truncate">{names.join(", ")}</span>;
-                    })()}
-                  </div>
-                </div>
-                <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground shrink-0"
-                  onClick={() => { setEditId(m.id); setShowAdd(false); }}>
-                  <Pencil className="h-3.5 w-3.5" />
-                </Button>
-                <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-red-600 shrink-0"
-                  onClick={() => del.mutate(m.id)} disabled={del.isPending}>
-                  <Trash2 className="h-3.5 w-3.5" />
-                </Button>
+      ) : showGrouped ? (
+        <div className="space-y-6">
+          {grouped.map((group) => (
+            <section key={group.cluster}>
+              <div className="mb-2 flex items-center gap-2">
+                <span
+                  className="h-2 w-2 shrink-0 rounded-full"
+                  style={{ backgroundColor: clusterColor(group.cluster) }}
+                />
+                <h2 className="text-sm font-medium capitalize">
+                  {group.label || (group.cluster < 0 ? "Not yet connected" : `Context ${group.cluster + 1}`)}
+                </h2>
+                <span className="text-xs text-muted-foreground">{group.items.length}</span>
               </div>
-            );
-          })}
+              <div className="space-y-2">{group.items.map(renderMemory)}</div>
+            </section>
+          ))}
         </div>
+      ) : (
+        <div className="space-y-2">{visibleMemories.map(renderMemory)}</div>
       )}
     </div>
   );

@@ -36,11 +36,16 @@ Background tasks the agent runs on a schedule and reports only when there is som
 Semantic memory entries with optional category. Full text search against the backend's memory
 store. Two views of the same store, switchable from the header:
 
-- **List** — search, add, edit and delete entries, filtered by topic.
+- **List** — search, add, edit and delete entries, filtered by topic. *Group by context*
+  gathers the rows under the subjects the backend's memory graph found, colour-matched to the
+  map; switch it off for the plain flat list of everything stored.
 - **Graph** — the memory graph drawn as a force-directed map (`react-force-graph-2d`), one
   colour per context. Node size is how connected a memory is; link colour is *why* two
   memories are linked — similar meaning, same topic, or naming the same thing. Click a node
   to read it and see everything it connects to; click a context chip to focus on it.
+
+Both read the same store and the same contexts, so a subject is the same colour and the same
+grouping whichever way you look at it.
 
 ### Admin
 Runtime configuration for the AI backend:
