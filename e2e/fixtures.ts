@@ -1,27 +1,38 @@
 import type { BrowserContext, Page } from "@playwright/test";
+import { encode } from "next-auth/jwt";
 
-// Test credentials — kept in sync with playwright.config.ts webServer.env.
-export const TEST_AUTH_PASSWORD = process.env.AUTH_PASSWORD ?? "test-password";
-export const TEST_AUTH_TOKEN = process.env.AUTH_TOKEN ?? "test-auth-token";
+// Kept in sync with playwright.config.ts webServer.env.
+export const TEST_AUTH_SECRET = process.env.AUTH_SECRET ?? "test-auth-secret-value";
+export const TEST_PERSON_ID = "person:alon";
 
-const AUTH_COOKIE = "assistent_auth";
+// Auth.js names the session cookie `authjs.session-token` over plain HTTP
+// (the `__Secure-` prefix is only used on HTTPS).
+const SESSION_COOKIE = "authjs.session-token";
 
 /**
- * Seed the session cookie directly so protected routes are reachable without
- * going through the login round-trip. The real login route sets a `secure`
- * cookie, which is awkward to rely on over plain HTTP in CI — the middleware
- * only checks the cookie value, so seeding it here is equivalent.
+ * Seed a real Auth.js session cookie so protected routes are reachable without
+ * a round-trip to Google. The cookie is a genuine signed JWE minted with the
+ * same secret the server uses, so the middleware validates it exactly as it
+ * would a real sign-in — the test bypasses the identity provider, not the
+ * session check.
  */
 export async function authenticate(context: BrowserContext): Promise<void> {
+  const token = await encode({
+    token: { sub: TEST_PERSON_ID, personId: TEST_PERSON_ID, name: "Alon" },
+    secret: TEST_AUTH_SECRET,
+    salt: SESSION_COOKIE,
+    maxAge: 60 * 60,
+  });
+
   await context.addCookies([
     {
-      name: AUTH_COOKIE,
-      value: TEST_AUTH_TOKEN,
+      name: SESSION_COOKIE,
+      value: token,
       domain: "localhost",
       path: "/",
       httpOnly: true,
       secure: false,
-      sameSite: "Strict",
+      sameSite: "Lax",
     },
   ]);
 }

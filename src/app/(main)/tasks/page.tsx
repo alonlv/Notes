@@ -10,7 +10,6 @@ import { List, LayoutGrid, AlertCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { TaskStatus } from "@/types/api";
 import { STATUS_LABELS, tagColor } from "@/lib/task-utils";
-import { useSelectedUser } from "@/context/user-context";
 
 type View = "list" | "kanban";
 
@@ -25,8 +24,7 @@ const STATUS_ACTIVE = "bg-primary text-primary-foreground";
 const STATUS_INACTIVE = "bg-secondary text-secondary-foreground hover:bg-secondary/80";
 
 export default function TasksPage() {
-  const { selectedUserId, selectedUserName } = useSelectedUser();
-  const { data: tasks = [], isLoading, error: tasksError } = useTasks(selectedUserId ?? undefined);
+  const { data: tasks = [], isLoading, error: tasksError } = useTasks();
   const { data: allTags = [] } = useTags();
   const [view, setView] = useState<View>("list");
   const [filter, setFilter] = useState<TaskStatus | "all">("all");
@@ -47,9 +45,6 @@ export default function TasksPage() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold">Tasks</h1>
-          {selectedUserName && (
-            <p className="text-xs text-primary mt-0.5">Viewing {selectedUserName}&apos;s tasks</p>
-          )}
         </div>
         <div className="flex items-center gap-1 rounded-lg border border-border p-1">
           <Button

@@ -5,7 +5,6 @@ import { Send, Bot, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Md } from "@/components/ui/md";
 import { cn } from "@/lib/utils";
-import { useSelectedUser } from "@/context/user-context";
 import { api } from "@/lib/api";
 
 interface Message {
@@ -20,7 +19,6 @@ export default function ChatPage() {
   const [error, setError] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const { selectedUserId, selectedUserName } = useSelectedUser();
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -31,13 +29,13 @@ export default function ChatPage() {
   useEffect(() => {
     let cancelled = false;
     api.chat
-      .history(selectedUserId || undefined)
+      .history()
       .then((data) => {
         if (!cancelled && data.messages.length) setMessages(data.messages);
       })
       .catch(() => { /* no history yet / backend unavailable — start fresh */ });
     return () => { cancelled = true; };
-  }, [selectedUserId]);
+  }, []);
 
   async function send() {
     const text = input.trim();
@@ -49,7 +47,7 @@ export default function ChatPage() {
     setLoading(true);
 
     try {
-      const { reply } = await api.chat.send(text, selectedUserId || undefined);
+      const { reply } = await api.chat.send(text);
       setMessages((prev) => [...prev, { role: "assistant", text: reply }]);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not reach the assistant.");
@@ -70,16 +68,6 @@ export default function ChatPage() {
       <div className="flex items-center gap-2 px-4 py-4 border-b border-border">
         <Bot className="h-5 w-5 text-muted-foreground" />
         <h1 className="text-lg font-semibold">Assistant</h1>
-        {selectedUserName && (
-          <span className="ml-auto text-xs text-muted-foreground">
-            as {selectedUserName}
-          </span>
-        )}
-        {!selectedUserName && (
-          <span className="ml-auto text-xs text-amber-500">
-            No user selected — memory won&apos;t sync with Telegram
-          </span>
-        )}
       </div>
 
       <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">

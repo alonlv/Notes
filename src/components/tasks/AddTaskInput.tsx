@@ -2,14 +2,12 @@
 
 import { useState } from "react";
 import { useCreateTask } from "@/hooks/use-tasks";
-import { useSelectedUser } from "@/context/user-context";
 import { Plus, Tag } from "lucide-react";
 
 export function AddTaskInput() {
   const [value, setValue] = useState("");
   const [tags, setTags] = useState("");
   const createTask = useCreateTask();
-  const { selectedUserId } = useSelectedUser();
 
   function submit() {
     const title = value.trim();
@@ -18,7 +16,7 @@ export function AddTaskInput() {
       .split(",")
       .map((s) => s.trim())
       .filter(Boolean);
-    createTask.mutate({ title, tags: tagsArr, user_id: selectedUserId ?? undefined });
+    createTask.mutate({ title, tags: tagsArr });
     setValue("");
     setTags("");
   }

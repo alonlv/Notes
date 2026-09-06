@@ -2,14 +2,12 @@
 
 import Link from "next/link";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
-import { LogOut, Plus, Hash, Users, X, Moon, Sun } from "lucide-react";
+import { LogOut, Plus, Hash, Moon, Sun } from "lucide-react";
 import { useTheme } from "@/context/theme-context";
 import { cn } from "@/lib/utils";
-import { AGENT_NAV, MAIN_NAV, isActive, type NavItem } from "@/lib/nav";
 import { useTopics, useCreateTopic } from "@/hooks/use-topics";
-import { useContacts } from "@/hooks/use-contacts";
 import { useLogout } from "@/hooks/use-logout";
-import { useSelectedUser } from "@/context/user-context";
+import { MAIN_NAV, AGENT_NAV, isActive } from "@/lib/nav";
 import { TOPIC_DOT } from "@/components/notes/TopicFilter";
 import { useState } from "react";
 
@@ -18,12 +16,10 @@ export function Sidebar() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const activeTopic = searchParams.get("topic");
-  const logout = useLogout();
 
   const { data: topics = [] } = useTopics();
-  const { data: contacts = [] } = useContacts();
   const createTopic = useCreateTopic();
-  const { selectedUserId, selectedUserName, setSelectedUser, clearSelectedUser } = useSelectedUser();
+  const logout = useLogout();
 
   const { theme, toggleTheme } = useTheme();
   const [showNewTopic, setShowNewTopic] = useState(false);
@@ -38,8 +34,7 @@ export function Sidebar() {
     router.push(`/notes?topic=${encodeURIComponent(name.toLowerCase())}`);
   }
 
-  // A selected topic is its own destination, so no section reads as current.
-  function navLink({ href, label, icon: Icon }: NavItem) {
+  function navLink(href: string, label: string, Icon: React.ElementType) {
     const active = isActive(href, pathname) && !activeTopic;
     return (
       <Link
@@ -62,54 +57,7 @@ export function Sidebar() {
         <h1 className="text-lg font-semibold tracking-tight">My Workspace</h1>
       </div>
 
-      {MAIN_NAV.map(navLink)}
-
-      {/* People / User selector */}
-      {contacts.length > 0 && (
-        <div className="mt-3">
-          <div className="flex items-center justify-between px-3 mb-1">
-            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">People</span>
-            {selectedUserId && (
-              <button
-                onClick={clearSelectedUser}
-                className="text-muted-foreground hover:text-foreground transition-colors"
-                title="Show all users"
-              >
-                <X className="h-3 w-3" />
-              </button>
-            )}
-          </div>
-
-          {contacts.map((contact) => {
-            const isSelected = selectedUserId === contact.canonical_id;
-            return (
-              <button
-                key={contact.canonical_id}
-                onClick={() =>
-                  isSelected
-                    ? clearSelectedUser()
-                    : setSelectedUser(contact.canonical_id, contact.name)
-                }
-                className={cn(
-                  "flex items-center gap-2.5 rounded-md px-3 py-1.5 text-sm transition-colors w-full text-left",
-                  isSelected
-                    ? "bg-primary/10 text-primary font-medium"
-                    : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
-                )}
-              >
-                <Users className="h-3.5 w-3.5 shrink-0" />
-                <span className="capitalize flex-1 truncate">{contact.name}</span>
-              </button>
-            );
-          })}
-
-          {selectedUserId && (
-            <p className="text-[10px] text-primary px-3 mt-1 truncate">
-              Viewing: {selectedUserName}
-            </p>
-          )}
-        </div>
-      )}
+      {MAIN_NAV.map(({ href, label, icon }) => navLink(href, label, icon))}
 
       {/* Topics */}
       <div className="mt-3">
@@ -148,14 +96,14 @@ export function Sidebar() {
         )}
 
         {topics.map((topic) => {
-          const isCurrent = activeTopic === topic.name && pathname.startsWith("/notes");
+          const isActive = activeTopic === topic.name && pathname.startsWith("/notes");
           return (
             <Link
               key={topic.id}
               href={`/notes?topic=${encodeURIComponent(topic.name)}`}
               className={cn(
                 "flex items-center gap-2.5 rounded-md px-3 py-1.5 text-sm transition-colors",
-                isCurrent ? "bg-accent text-accent-foreground font-medium" : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                isActive ? "bg-accent text-accent-foreground font-medium" : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
               )}
             >
               <span className={cn("w-2 h-2 rounded-full shrink-0", TOPIC_DOT[topic.color] ?? "bg-gray-400")} />
@@ -171,7 +119,7 @@ export function Sidebar() {
         <div className="px-3 mb-1">
           <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Agent</span>
         </div>
-        {AGENT_NAV.map(navLink)}
+        {AGENT_NAV.map(({ href, label, icon }) => navLink(href, label, icon))}
       </div>
 
       <div className="mt-auto flex flex-col gap-1">

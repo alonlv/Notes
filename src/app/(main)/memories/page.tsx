@@ -12,8 +12,6 @@ import { PeoplePicker, togglePersonId } from "@/components/ui/PeoplePicker";
 import { api, type MemoryWrite } from "@/lib/api";
 import type { Memory, MemoryGraph as MemoryGraphData } from "@/types/api";
 import { useContacts } from "@/hooks/use-contacts";
-import { useSelectedUser } from "@/context/user-context";
-import { Users } from "lucide-react";
 
 type EditState = { content: string; category: string; topics: string; authorized_ids: string[] };
 
@@ -29,11 +27,6 @@ function parseTopics(raw: string): string[] {
     }
   }
   return out;
-}
-
-/** Who may see a memory: whoever was ticked, plus always the person being viewed. */
-function authorizedIds(selectedUserId: string | null, ticked: string[]): string[] {
-  return [...new Set([selectedUserId, ...ticked].filter((v): v is string => Boolean(v)))];
 }
 
 /** Who this memory is shared with. The metadata copy wins where it exists —
@@ -130,20 +123,18 @@ export default function MemoriesPage() {
   const highlightRef = useRef<HTMLDivElement | null>(null);
   const qc = useQueryClient();
   const { data: contacts = [] } = useContacts();
-  const { selectedUserId, selectedUserName } = useSelectedUser();
 
   const { data: memories = [], isLoading, error } = useQuery<Memory[]>({
-    queryKey: ["memories", submitted, selectedUserId],
-    queryFn: () => api.memories.list(submitted, selectedUserId ?? undefined),
+    queryKey: ["memories", submitted],
+    queryFn: () => api.memories.list(submitted),
   });
 
-  // The graph is served whole rather than searched, so it only depends on who is
-  // selected and which topic (if any) the view is scoped to. Both views read it:
-  // the map draws it, and the list groups by the contexts it found.
+  // The graph is served whole rather than searched, so it only depends on which
+  // topic (if any) the view is scoped to. Both views read it: the map draws it,
+  // and the list groups by the contexts it found.
   const { data: graph, isLoading: graphLoading, error: graphError } = useQuery<MemoryGraphData>({
-    queryKey: ["memory-graph", selectedUserId, topicFilter],
-    enabled: !!selectedUserId,
-    queryFn: () => api.memories.graph(selectedUserId!, topicFilter ?? undefined),
+    queryKey: ["memory-graph", topicFilter],
+    queryFn: () => api.memories.graph(topicFilter ?? undefined),
   });
 
   // Jumping from a node to its entry in the list is only useful if you land on it.
@@ -232,8 +223,7 @@ export default function MemoriesPage() {
         key={m.id}
         initial={{ content: m.content, category: category ?? "", topics: memoryTopics(m).join(", "), authorized_ids: m.authorized_ids?.length ? m.authorized_ids : (m.owner_id || m.user_id) ? [m.owner_id || m.user_id || ""] : [] }}
         onSave={(s) => {
-          const ids = authorizedIds(selectedUserId, s.authorized_ids);
-          update.mutate({ id: m.id, body: { content: s.content, category: s.category || undefined, topics: parseTopics(s.topics), user_id: selectedUserId || undefined, authorized_ids: ids } });
+          update.mutate({ id: m.id, body: { content: s.content, category: s.category || undefined, topics: parseTopics(s.topics), authorized_ids: s.authorized_ids.filter(Boolean) } });
         }}
         onCancel={() => setEditId(null)}
         saving={update.isPending}
@@ -289,9 +279,6 @@ export default function MemoriesPage() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold">Memory</h1>
-          {selectedUserName && (
-            <p className="text-xs text-primary mt-0.5">Viewing {selectedUserName}&apos;s memory</p>
-          )}
         </div>
         <div className="flex gap-2">
           <div className="flex items-center rounded-md border border-border p-0.5">
@@ -317,11 +304,9 @@ export default function MemoriesPage() {
           >
             <RefreshCw className="h-4 w-4" />
           </Button>
-          {selectedUserId && (
-            <Button size="sm" onClick={() => { setShowAdd(true); setEditId(null); }}>
-              <Plus className="h-4 w-4 mr-1" /> Add
-            </Button>
-          )}
+          <Button size="sm" onClick={() => { setShowAdd(true); setEditId(null); }}>
+            <Plus className="h-4 w-4 mr-1" /> Add
+          </Button>
         </div>
       </div>
 
@@ -332,20 +317,12 @@ export default function MemoriesPage() {
         </div>
       )}
 
-      {contacts.length > 0 && !selectedUserId && (
-        <div className="mb-4 flex items-center gap-2 rounded-lg border border-border bg-muted/40 px-4 py-3 text-sm text-muted-foreground">
-          <Users className="h-4 w-4 shrink-0" />
-          Select a profile from the sidebar to view and manage memories.
-        </div>
-      )}
-
-      {showAdd && selectedUserId && (
+      {showAdd && (
         <div className="mb-4">
           <MemoryForm
-            initial={{ content: "", category: "", topics: "", authorized_ids: [selectedUserId] }}
+            initial={{ content: "", category: "", topics: "", authorized_ids: [] }}
             onSave={(s) => {
-              const ids = authorizedIds(selectedUserId, s.authorized_ids);
-              create.mutate({ content: s.content, category: s.category || undefined, topics: parseTopics(s.topics), user_id: selectedUserId, authorized_ids: ids });
+              create.mutate({ content: s.content, category: s.category || undefined, topics: parseTopics(s.topics), authorized_ids: s.authorized_ids.filter(Boolean) });
             }}
             onCancel={() => setShowAdd(false)}
             saving={create.isPending}
@@ -420,7 +397,7 @@ export default function MemoriesPage() {
       )}
 
       {view === "graph" ? (
-        !selectedUserId ? null : graphError ? (
+        graphError ? (
           <div className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
             <AlertCircle className="h-4 w-4 shrink-0" />
             Could not load the memory graph.

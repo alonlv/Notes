@@ -1,5 +1,5 @@
 import { defineConfig, devices } from "@playwright/test";
-import { TEST_AUTH_PASSWORD, TEST_AUTH_TOKEN } from "./e2e/fixtures";
+import { TEST_AUTH_SECRET } from "./e2e/fixtures";
 
 const PORT = 3000;
 const BASE_URL = `http://localhost:${PORT}`;
@@ -34,8 +34,12 @@ export default defineConfig({
     timeout: 180_000,
     reuseExistingServer: !process.env.CI,
     env: {
-      AUTH_PASSWORD: TEST_AUTH_PASSWORD,
-      AUTH_TOKEN: TEST_AUTH_TOKEN,
+      AUTH_SECRET: TEST_AUTH_SECRET,
+      // Google credentials only need to be present for Auth.js to configure the
+      // provider; the suite seeds a session cookie instead of signing in.
+      AUTH_GOOGLE_ID: "test-google-client-id",
+      AUTH_GOOGLE_SECRET: "test-google-client-secret",
+      AUTH_TRUST_HOST: "true",
       BACKEND_URL: process.env.BACKEND_URL ?? "http://localhost:9999",
       APP_API_TOKEN: process.env.APP_API_TOKEN ?? "test-api-token",
       NEXT_TELEMETRY_DISABLED: "1",

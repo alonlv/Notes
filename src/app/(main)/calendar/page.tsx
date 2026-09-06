@@ -5,12 +5,10 @@ import { CalendarDays, Check, X, Loader2, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { api } from "@/lib/api";
 import { useCalendarConnection } from "@/hooks/use-calendar-connection";
-import { useSelectedUser } from "@/context/user-context";
 
 export default function CalendarConnectionsPage() {
-  const { selectedUserId, selectedUserName } = useSelectedUser();
-  const userId = selectedUserId ?? "api-user";
-  const { data: status, isLoading, refetch } = useCalendarConnection(userId);
+  // Each person connects their own calendar; there is nobody else to manage.
+  const { data: status, isLoading, refetch } = useCalendarConnection();
 
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState("");
@@ -22,7 +20,7 @@ export default function CalendarConnectionsPage() {
     setError("");
     setBusy("google");
     try {
-      const { auth_url } = await api.calendars.startGoogleAuth(userId);
+      const { auth_url } = await api.calendars.startGoogleAuth();
       window.location.href = auth_url;
     } catch {
       setError("Could not start Google authorization. Check that Google Calendar is configured on the backend.");
@@ -33,7 +31,7 @@ export default function CalendarConnectionsPage() {
   async function disconnectGoogle() {
     setBusy("google");
     try {
-      await api.calendars.disconnectGoogle(userId);
+      await api.calendars.disconnectGoogle();
       await refetch();
     } finally {
       setBusy(null);
@@ -44,7 +42,7 @@ export default function CalendarConnectionsPage() {
     setError("");
     setBusy("apple");
     try {
-      await api.calendars.appleSetup({ user_id: userId, username: appleUser.trim(), password: applePass.trim() });
+      await api.calendars.appleSetup({ username: appleUser.trim(), password: applePass.trim() });
       setAppleUser("");
       setApplePass("");
       setShowAppleForm(false);
@@ -59,7 +57,7 @@ export default function CalendarConnectionsPage() {
   async function disconnectApple() {
     setBusy("apple");
     try {
-      await api.calendars.disconnectApple(userId);
+      await api.calendars.disconnectApple();
       await refetch();
     } finally {
       setBusy(null);
@@ -74,8 +72,7 @@ export default function CalendarConnectionsPage() {
       </div>
       <p className="text-sm text-muted-foreground mb-6">
         The assistant doesn&apos;t keep its own calendar — it works directly with the calendar you already use.
-        Connect Google or Apple here and the assistant can read your schedule and add events for you
-        {selectedUserId ? ` (managing ${selectedUserName})` : ""}.
+        Connect Google or Apple here and the assistant can read your schedule and add events for you.
       </p>
 
       {error && (
@@ -102,11 +99,21 @@ export default function CalendarConnectionsPage() {
                   Disconnect
                 </Button>
               ) : (
-                <Button size="sm" disabled={busy === "google"} onClick={connectGoogle}>
+                <Button
+                  size="sm"
+                  disabled={busy === "google" || status?.google_configured === false}
+                  onClick={connectGoogle}
+                >
                   {busy === "google" ? <Loader2 className="h-4 w-4 animate-spin" /> : <>Connect <ExternalLink className="h-3.5 w-3.5 ml-1" /></>}
                 </Button>
               )}
             </div>
+            {status?.google_configured === false && !status?.google && (
+              <p className="mt-2 text-xs text-muted-foreground">
+                Google sign-in isn&apos;t set up on this deployment — ask an admin to set
+                GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET.
+              </p>
+            )}
           </div>
 
           {/* Apple */}

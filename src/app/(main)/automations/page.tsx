@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Trash2, Bell, Zap, Clock, RefreshCw, AlertCircle, Plus, Pencil, Users } from "lucide-react";
+import { Trash2, Bell, Zap, Clock, RefreshCw, AlertCircle, Plus, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Md } from "@/components/ui/md";
 import {
@@ -16,7 +16,6 @@ import {
 import type { Automation, AutomationKind } from "@/types/api";
 import { api } from "@/lib/api";
 import { useContacts } from "@/hooks/use-contacts";
-import { useSelectedUser } from "@/context/user-context";
 import { cn } from "@/lib/utils";
 
 const TABS: { kind: AutomationKind; label: string; icon: React.ElementType }[] = [
@@ -32,11 +31,10 @@ export default function AutomationsPage() {
   const [showAdd, setShowAdd] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const { data: contacts = [] } = useContacts();
-  const { selectedUserId, selectedUserName } = useSelectedUser();
 
   const { data: automations = [], isLoading, error } = useQuery<Automation[]>({
-    queryKey: ["automations", selectedUserId],
-    queryFn: () => api.automations.list(selectedUserId ?? undefined),
+    queryKey: ["automations"],
+    queryFn: () => api.automations.list(),
   });
 
   const items = automations.filter((a) => a.kind === activeKind);
@@ -63,7 +61,7 @@ export default function AutomationsPage() {
   }
 
   function buildPayload(f: ScheduledFormState) {
-    return { ...scheduledFormToPayload(f, "content", selectedUserId), kind: activeKind };
+    return { ...scheduledFormToPayload(f, "content"), kind: activeKind };
   }
 
   const isReminder = activeKind === "reminder";
@@ -80,19 +78,14 @@ export default function AutomationsPage() {
       <div className="flex items-center justify-between mb-5">
         <div>
           <h1 className="text-2xl font-bold">Automations</h1>
-          {selectedUserName && (
-            <p className="text-xs text-primary mt-0.5">Viewing {selectedUserName}&apos;s automations</p>
-          )}
         </div>
         <div className="flex gap-2">
           <Button variant="ghost" size="sm" onClick={() => qc.invalidateQueries({ queryKey: ["automations"] })}>
             <RefreshCw className="h-4 w-4" />
           </Button>
-          {selectedUserId && (
-            <Button size="sm" onClick={() => { setShowAdd(true); setEditId(null); }}>
-              <Plus className="h-4 w-4 mr-1" /> Add
-            </Button>
-          )}
+          <Button size="sm" onClick={() => { setShowAdd(true); setEditId(null); }}>
+            <Plus className="h-4 w-4 mr-1" /> Add
+          </Button>
         </div>
       </div>
 
@@ -126,15 +119,8 @@ export default function AutomationsPage() {
         </div>
       )}
 
-      {contacts.length > 0 && !selectedUserId && (
-        <div className="mb-4 flex items-center gap-2 rounded-lg border border-border bg-muted/40 px-4 py-3 text-sm text-muted-foreground">
-          <Users className="h-4 w-4 shrink-0" />
-          Select a profile from the sidebar to view and manage automations.
-        </div>
-      )}
-
       {/* Add form */}
-      {showAdd && selectedUserId && (
+      {showAdd && (
         <div className="mb-4">
           <ScheduledItemForm
             initial={emptyForm}

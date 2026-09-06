@@ -7,6 +7,7 @@ import {
   LayoutDashboard,
   MessageSquare,
   Settings,
+  Ticket,
   Zap,
   type LucideIcon,
 } from "lucide-react";
@@ -22,6 +23,7 @@ export const MAIN_NAV: NavItem[] = [
   { href: "/", label: "Home", icon: LayoutDashboard },
   { href: "/notes", label: "Notes", icon: FileText },
   { href: "/tasks", label: "Tasks", icon: CheckSquare },
+  { href: "/vouchers", label: "Wallet", icon: Ticket },
   { href: "/calendar", label: "Calendar", icon: CalendarDays },
   { href: "/chat", label: "Chat", icon: MessageSquare },
   { href: "/feed", label: "Inbox", icon: Inbox },

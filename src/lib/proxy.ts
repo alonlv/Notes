@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 
+import { auth } from "@/lib/auth";
+
 // BACKEND_INTERNAL_URL is used for server-to-server calls (Docker/Railway internal network).
 // Falls back to BACKEND_URL (public URL) when not set.
 const BASE = process.env.BACKEND_INTERNAL_URL || process.env.BACKEND_URL;
@@ -11,13 +13,30 @@ if (!BASE || !TOKEN) {
   );
 }
 
+/**
+ * Forward a request to the backend as the signed-in person.
+ *
+ * The caller's identity comes from the Auth.js session and is sent as
+ * X-Person-Id. It is never read from the incoming request, so a browser cannot
+ * ask for another person's data by naming them — which the old `?user_id=`
+ * parameter allowed.
+ */
 export async function proxyFetch(path: string, init?: RequestInit): Promise<NextResponse> {
+  const session = await auth();
+  if (!session?.personId) {
+    return NextResponse.json({ error: "Not signed in." }, { status: 401 });
+  }
+
   const url = `${BASE!}${path}`;
 
   try {
     const res = await fetch(url, {
       ...init,
-      headers: { Authorization: `Bearer ${TOKEN!}`, "Content-Type": "application/json" },
+      headers: {
+        Authorization: `Bearer ${TOKEN!}`,
+        "Content-Type": "application/json",
+        "X-Person-Id": session.personId,
+      },
     });
 
     if (res.status === 204) {

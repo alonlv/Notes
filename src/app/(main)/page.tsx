@@ -5,7 +5,7 @@ import { useState } from "react";
 import {
   CheckSquare, CalendarDays, Bell, Sparkles, ArrowRight, Send, Bot, AlertCircle,
 } from "lucide-react";
-import { useSelectedUser } from "@/context/user-context";
+import { useCurrentPerson } from "@/context/user-context";
 import { useTasks } from "@/hooks/use-tasks";
 import { useAutomations } from "@/hooks/use-automations";
 import { useCalendarConnection } from "@/hooks/use-calendar-connection";
@@ -29,11 +29,11 @@ function endOfToday() {
 }
 
 export default function DashboardPage() {
-  const { selectedUserId, selectedUserName } = useSelectedUser();
+  const { personName } = useCurrentPerson();
 
-  const { data: tasks = [] } = useTasks(selectedUserId || undefined);
-  const { data: reminders = [] } = useAutomations(selectedUserId || undefined, "reminder");
-  const { data: calConn } = useCalendarConnection(selectedUserId || "api-user");
+  const { data: tasks = [] } = useTasks();
+  const { data: reminders = [] } = useAutomations("reminder");
+  const { data: calConn } = useCalendarConnection();
   const { data: status } = useBackgroundStatus();
 
   const now = new Date();
@@ -53,14 +53,14 @@ export default function DashboardPage() {
     <div className="max-w-5xl mx-auto px-4 py-6 md:py-8">
       <header className="mb-6">
         <h1 className="text-2xl font-semibold tracking-tight">
-          {greeting()}{selectedUserName ? `, ${selectedUserName}` : ""}
+          {greeting()}{personName ? `, ${personName}` : ""}
         </h1>
         <p className="text-sm text-muted-foreground mt-1">
           {now.toLocaleDateString([], { weekday: "long", month: "long", day: "numeric" })}
         </p>
       </header>
 
-      <QuickAsk userId={selectedUserId || undefined} />
+      <QuickAsk />
 
       {/* Only renders when something actually failed — silence means healthy. */}
       <LatestApiError className="mt-4" />
@@ -181,7 +181,7 @@ function Empty({ children }: { children: React.ReactNode }) {
   return <p className="text-sm text-muted-foreground">{children}</p>;
 }
 
-function QuickAsk({ userId }: { userId?: string }) {
+function QuickAsk() {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [last, setLast] = useState<{ q: string; a: string } | null>(null);
@@ -195,7 +195,7 @@ function QuickAsk({ userId }: { userId?: string }) {
     setLoading(true);
     setLast({ q: text, a: "" });
     try {
-      const { reply } = await api.chat.send(text, userId);
+      const { reply } = await api.chat.send(text);
       setLast({ q: text, a: reply });
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not reach the assistant.");

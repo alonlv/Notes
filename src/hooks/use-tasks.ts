@@ -4,10 +4,10 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import type { Priority, Task, TaskStatus } from "@/types/api";
 
-export function useTasks(userId?: string) {
+export function useTasks(tag?: string) {
   return useQuery({
-    queryKey: ["tasks", userId ?? null],
-    queryFn: () => api.tasks.list(userId),
+    queryKey: ["tasks", tag ?? null],
+    queryFn: () => api.tasks.list(tag),
   });
 }
 
@@ -22,7 +22,7 @@ export function useTags() {
 export function useCreateTask() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (body: { title: string; status?: TaskStatus; priority?: Priority; tags?: string[]; due_date?: string; user_id?: string }) =>
+    mutationFn: (body: { title: string; status?: TaskStatus; priority?: Priority; tags?: string[]; due_date?: string }) =>
       api.tasks.create(body),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["tasks"] }),
   });
@@ -36,7 +36,6 @@ type TaskUpdateArgs = { id: string } & Partial<{
   tags: string[];
   due_date: string;
   clear_due_date: boolean;
-  user_id: string;
   authorized_ids: string[];
 }>;
 
