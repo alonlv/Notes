@@ -32,7 +32,7 @@ test.describe("app shell", () => {
   });
 
   test("every admin tab renders", async ({ page, context }) => {
-    // The panels live in their own modules now; this walks all nine so a bad
+    // The panels live in their own modules now; this walks all ten so a bad
     // import or a missing prop shows up as a failing test rather than a blank
     // tab nobody opened.
     await authenticate(context);
@@ -47,6 +47,7 @@ test.describe("app shell", () => {
       ["general", "Agent Identity"],
       ["providers", "Add provider"],
       ["contacts", "Add person"],
+      ["calendar", "Google Calendar"],
       ["prompt", "Core Behavior"],
       ["memory", "How memory consolidation works"],
       ["data", "Load Data"],
@@ -109,6 +110,13 @@ async function stubAdmin(page: Page): Promise<void> {
       status: 200,
       contentType: "application/json",
       body: JSON.stringify({ total: 0, by_source: {}, latest: null, recent: [] }),
+    }),
+  );
+  await page.route("**/api/calendars/connection-status", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ google: false, apple: false, google_configured: true }),
     }),
   );
 }

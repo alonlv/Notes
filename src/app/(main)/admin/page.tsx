@@ -2,13 +2,16 @@
 
 import { Suspense, useState, useEffect, useCallback, useRef } from "react";
 import { useSearchParams } from "next/navigation";
-import { Plus, RotateCcw, Save } from "lucide-react";
+import { Plus, RotateCcw, Save, Sun, Moon, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { api } from "@/lib/api";
+import { useTheme } from "@/context/theme-context";
+import { useLogout } from "@/hooks/use-logout";
 import { ApiErrorsPanel } from "@/components/system/ApiErrors";
 import type { Contact } from "@/types/api";
 import { BackgroundStatusPanel } from "@/components/admin/BackgroundStatusPanel";
+import { CalendarPanel } from "@/components/admin/CalendarPanel";
 import { ContactCard } from "@/components/admin/ContactCard";
 import { DataManager } from "@/components/admin/DataManager";
 import { HeartbeatPanel } from "@/components/admin/HeartbeatPanel";
@@ -59,6 +62,8 @@ function Admin() {
   const [tab, setTab] = useState<Tab>(
     (ALL_TABS as string[]).includes(requestedTab ?? "") ? (requestedTab as Tab) : "general",
   );
+  const { theme, toggleTheme } = useTheme();
+  const logout = useLogout();
   const [config, setConfig] = useState<Config | null>(null);
   const [defaults, setDefaults] = useState<Partial<Config>>({});
   const [providers, setProviders] = useState<LlmProvider[]>([]);
@@ -242,10 +247,18 @@ function Admin() {
     <div className="max-w-3xl mx-auto px-4 py-6">
       <div className="flex items-center justify-between mb-5">
         <h1 className="text-xl font-semibold">Admin</h1>
-        <Button variant="outline" size="sm" onClick={loadConfig}>
-          <RotateCcw className="h-3.5 w-3.5 mr-1.5" />
-          Refresh
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={loadConfig}>
+            <RotateCcw className="h-3.5 w-3.5 mr-1.5" />
+            Refresh
+          </Button>
+          <Button variant="outline" size="icon" onClick={toggleTheme} title={theme === "dark" ? "Light mode" : "Dark mode"}>
+            {theme === "dark" ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
+          </Button>
+          <Button variant="outline" size="icon" onClick={logout} title="Sign out">
+            <LogOut className="h-3.5 w-3.5" />
+          </Button>
+        </div>
       </div>
 
       {/* Group selector */}
@@ -562,6 +575,9 @@ function Admin() {
           </div>
         </div>
       )}
+
+      {/* ── Calendar ───────────────────────────────────────────────────────── */}
+      {tab === "calendar" && <CalendarPanel />}
 
       {/* ── Data Management ────────────────────────────────────────────────── */}
       {tab === "data" && (

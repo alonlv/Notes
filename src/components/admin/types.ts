@@ -1,5 +1,5 @@
 import {
-  Activity, AlertTriangle, Brain, Cpu, Database, FileText, Settings, Users, Zap,
+  Activity, AlertTriangle, Brain, CalendarDays, Cpu, Database, FileText, Settings, Users, Zap,
   type LucideIcon,
 } from "lucide-react";
 
@@ -58,7 +58,7 @@ export type ToastFn = (message: string, type?: Toast["type"]) => void;
 
 // ─── Navigation ──────────────────────────────────────────────────────────────
 
-export type Tab = "general" | "prompt" | "providers" | "contacts" | "data" | "heartbeat" | "memory" | "background" | "errors";
+export type Tab = "general" | "prompt" | "providers" | "contacts" | "calendar" | "data" | "heartbeat" | "memory" | "background" | "errors";
 
 export type Group = "settings" | "ai" | "system";
 
@@ -74,6 +74,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { id: "general",   label: "General",   icon: Settings },
       { id: "providers", label: "Providers", icon: Cpu },
       { id: "contacts",  label: "Contacts",  icon: Users },
+      { id: "calendar",  label: "Calendar",  icon: CalendarDays },
     ],
   },
   {
